@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+engine/.venv/
+
+# Build output
+dist/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Test and coverage
+coverage/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+playwright-report/
+test-results/
+
+# Local data
+infra/data/
+*.log
+
+# Editors
+.vscode/
+.idea/
+.DS_Store

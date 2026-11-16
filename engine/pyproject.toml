@@ -1,0 +1,48 @@
+[project]
+name = "tracea-engine"
+version = "0.1.0"
+description = "Moteur Tracea : interprétation, génération, géométrie, rendus et exports"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.11",
+]
+
+[project.optional-dependencies]
+geometry = ["shapely>=2.1"]
+export = ["ezdxf>=1.4", "svgwrite>=1.4", "reportlab>=4.4", "trimesh>=4.6", "pygltflib>=1.16"]
+bim = ["ifcopenshell>=0.8"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "hypothesis>=6.135",
+    "mypy>=1.17",
+    "ruff>=0.12",
+    "jsonschema>=4.25",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tracea_engine"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Field names mirror the JSON schema (camelCase) so fixtures load without aliases.
+"tracea_engine/domain/model.py" = ["N815"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+packages = ["tracea_engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

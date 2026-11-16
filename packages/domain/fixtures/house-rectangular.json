@@ -1,0 +1,248 @@
+{
+  "schemaVersion": "1.0",
+  "id": "01JCXF0000000000000000FIX1",
+  "project": { "name": "Maison de référence", "revision": "A", "author": "Équipe Tracea" },
+  "site": {
+    "boundary": [
+      [0, 0],
+      [20000, 0],
+      [20000, 30000],
+      [0, 30000]
+    ],
+    "northAngle": 0,
+    "setbacks": { "front": 5000, "side": 3000, "rear": 4000 },
+    "accessEdgeIndex": 0,
+    "slope": { "direction": 0, "percent": 0 },
+    "groundLevel": 0
+  },
+  "levels": [
+    {
+      "id": "lvl_0",
+      "name": "Rez-de-chaussée",
+      "index": 0,
+      "elevation": 0,
+      "height": 2700,
+      "slabThickness": 200
+    }
+  ],
+  "walls": [
+    {
+      "id": "w_01",
+      "levelId": "lvl_0",
+      "start": [0, 0],
+      "end": [12000, 0],
+      "thickness": 300,
+      "kind": "exterior",
+      "height": 2700,
+      "locked": false
+    },
+    {
+      "id": "w_02",
+      "levelId": "lvl_0",
+      "start": [12000, 0],
+      "end": [12000, 8000],
+      "thickness": 300,
+      "kind": "exterior",
+      "height": 2700,
+      "locked": false
+    },
+    {
+      "id": "w_03",
+      "levelId": "lvl_0",
+      "start": [12000, 8000],
+      "end": [0, 8000],
+      "thickness": 300,
+      "kind": "exterior",
+      "height": 2700,
+      "locked": false
+    },
+    {
+      "id": "w_04",
+      "levelId": "lvl_0",
+      "start": [0, 8000],
+      "end": [0, 0],
+      "thickness": 300,
+      "kind": "exterior",
+      "height": 2700,
+      "locked": false
+    },
+    {
+      "id": "w_05",
+      "levelId": "lvl_0",
+      "start": [7000, 0],
+      "end": [7000, 8000],
+      "thickness": 100,
+      "kind": "partition",
+      "locked": false
+    },
+    {
+      "id": "w_06",
+      "levelId": "lvl_0",
+      "start": [7000, 4000],
+      "end": [12000, 4000],
+      "thickness": 100,
+      "kind": "partition",
+      "locked": false
+    }
+  ],
+  "openings": [
+    {
+      "id": "o_01",
+      "wallId": "w_01",
+      "type": "door",
+      "offset": 1000,
+      "width": 900,
+      "height": 2100,
+      "sillHeight": 0,
+      "swing": { "side": "left", "direction": "in" },
+      "locked": false
+    },
+    {
+      "id": "o_02",
+      "wallId": "w_01",
+      "type": "window",
+      "offset": 3500,
+      "width": 1500,
+      "height": 1200,
+      "sillHeight": 900,
+      "swing": null,
+      "locked": false
+    },
+    {
+      "id": "o_03",
+      "wallId": "w_03",
+      "type": "window",
+      "offset": 1000,
+      "width": 1200,
+      "height": 1200,
+      "sillHeight": 900,
+      "swing": null,
+      "locked": false
+    },
+    {
+      "id": "o_04",
+      "wallId": "w_05",
+      "type": "door",
+      "offset": 1500,
+      "width": 800,
+      "height": 2100,
+      "sillHeight": 0,
+      "swing": { "side": "right", "direction": "in" },
+      "locked": false
+    },
+    {
+      "id": "o_05",
+      "wallId": "w_05",
+      "type": "door",
+      "offset": 5000,
+      "width": 700,
+      "height": 2100,
+      "sillHeight": 0,
+      "swing": { "side": "left", "direction": "in" },
+      "locked": false
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r_01",
+      "levelId": "lvl_0",
+      "name": "Séjour",
+      "type": "living",
+      "wallIds": ["w_01", "w_05", "w_03", "w_04"],
+      "polygon": [
+        [150, 150],
+        [6950, 150],
+        [6950, 7850],
+        [150, 7850]
+      ],
+      "area": 52360000,
+      "habitable": true,
+      "locked": false
+    },
+    {
+      "id": "r_02",
+      "levelId": "lvl_0",
+      "name": "Chambre",
+      "type": "bedroom",
+      "wallIds": ["w_01", "w_02", "w_06", "w_05"],
+      "polygon": [
+        [7050, 150],
+        [11850, 150],
+        [11850, 3950],
+        [7050, 3950]
+      ],
+      "area": 18240000,
+      "habitable": true,
+      "locked": false
+    },
+    {
+      "id": "r_03",
+      "levelId": "lvl_0",
+      "name": "Salle de bain",
+      "type": "bathroom",
+      "wallIds": ["w_06", "w_02", "w_03", "w_05"],
+      "polygon": [
+        [7050, 4050],
+        [11850, 4050],
+        [11850, 7850],
+        [7050, 7850]
+      ],
+      "area": 18240000,
+      "habitable": true,
+      "locked": false
+    }
+  ],
+  "stairs": [],
+  "roof": {
+    "type": "gable",
+    "pitch": 35,
+    "overhang": 400,
+    "ridgeDirection": 0,
+    "material": "tile"
+  },
+  "slabs": [
+    {
+      "id": "sl_0",
+      "levelId": "lvl_0",
+      "polygon": [
+        [0, 0],
+        [12000, 0],
+        [12000, 8000],
+        [0, 8000]
+      ],
+      "thickness": 200
+    }
+  ],
+  "annotations": {
+    "dimensions": [
+      {
+        "id": "d_01",
+        "levelId": "lvl_0",
+        "kind": "exterior",
+        "points": [
+          [0, 0],
+          [12000, 0]
+        ],
+        "offset": 1500
+      }
+    ],
+    "sectionLines": [
+      {
+        "id": "sec_A",
+        "name": "AA",
+        "start": [-1000, 4000],
+        "end": [13000, 4000],
+        "lookDirection": 90
+      }
+    ],
+    "labels": []
+  },
+  "checks": [],
+  "metrics": {
+    "habitableArea": 88840000,
+    "floorArea": 88840000,
+    "footprintArea": 96000000,
+    "siteCoverageRatio": 0.16
+  },
+  "generation": { "seed": 42, "engineVersion": "0.1.0", "programHash": "fixture-house-rectangular" }
+}

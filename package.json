@@ -1,0 +1,30 @@
+{
+  "name": "tracea",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "contract": "pnpm --filter @tracea/domain run contract && cd engine && uv run pytest tests/test_contract.py -q",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@tracea/config": "workspace:*",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.6",
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": ">=8.5.18"
+    }
+  }
+}
