@@ -43,6 +43,11 @@ export function createConfig({ tsconfigRootDir, restrictedImports = [] }) {
         // With noUncheckedIndexedAccess, `as T` on a checked index read is the explicit form.
         "@typescript-eslint/non-nullable-type-assertion-style": "off",
         "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+        // React event handlers are written as arrow shorthands returning void.
+        "@typescript-eslint/no-confusing-void-expression": [
+          "error",
+          { ignoreArrowShorthand: true },
+        ],
         "import/no-cycle": "error",
         "no-restricted-imports":
           restrictedImports.length > 0 ? ["error", { patterns: restrictedImports }] : "off",

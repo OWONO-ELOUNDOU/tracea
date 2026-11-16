@@ -1,12 +1,17 @@
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
+import { connectDatabase } from "./db/client.js";
+import { SmtpMailer } from "./mail/smtp.js";
 
 const config = loadConfig();
-const app = await buildApp(config);
+const database = await connectDatabase(config.DATABASE_URL);
+const mailer = new SmtpMailer(config.SMTP_URL, config.MAIL_FROM);
+const app = await buildApp(config, { db: database.db, mailer });
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, "shutting down");
   await app.close();
+  await database.close();
   process.exit(0);
 };
 process.on("SIGINT", () => void shutdown("SIGINT"));

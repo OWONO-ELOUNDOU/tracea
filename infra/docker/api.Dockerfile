@@ -17,6 +17,7 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out ./
+COPY --from=build /app/apps/api/drizzle ./drizzle
 USER node
 EXPOSE 3001
 HEALTHCHECK --interval=10s --timeout=3s CMD wget -qO- http://127.0.0.1:3001/health || exit 1

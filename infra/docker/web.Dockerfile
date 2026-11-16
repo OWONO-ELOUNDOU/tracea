@@ -10,6 +10,8 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 COPY packages ./packages
 COPY apps/web ./apps/web
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @tracea/domain build && pnpm --filter @tracea/web build
 
 FROM node:22-alpine AS runtime
