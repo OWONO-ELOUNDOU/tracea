@@ -2,8 +2,14 @@
 
 @theme {
   --color-ink: #1b1f24;
-  --color-paper: #fafaf7;
-  --color-accent: #1f6f8b;
+  --color-paper: #f4f1ea;
+  --color-surface: #ffffff;
+  --color-line: #d9d4c7;
+  --color-primary: #1e4a6e;
+  --color-accent: #c97a2b;
+  --color-ok: #2e7d4f;
+  --color-warn: #b8860b;
+  --color-danger: #b3261e;
   --color-dim: #c00000;
   --color-door: #008000;
   --color-window: #00a0a0;
