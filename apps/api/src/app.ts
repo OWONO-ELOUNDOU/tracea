@@ -8,23 +8,35 @@ import type { AppConfig } from "./config.js";
 import type { Database } from "./db/client.js";
 import type { Mailer } from "./mail/mailer.js";
 import { problem, problemErrorHandler, sendProblem } from "./problem.js";
+import { ProjectService } from "./projects/service.js";
 import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { openapiRoutes } from "./routes/openapi.js";
+import { projectRoutes } from "./routes/projects.js";
 
 export interface AppDependencies {
   db: Database;
   mailer: Mailer;
 }
 
+export interface AppOptions {
+  /**
+   * Per-route limits on login and mail-sending routes. Defaults to on outside NODE_ENV=test;
+   * the test suite turns them on explicitly where it checks them.
+   */
+  strictRateLimits?: boolean;
+}
+
 export async function buildApp(
   config: AppConfig,
   dependencies: AppDependencies,
+  options: AppOptions = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: config.LOG_LEVEL },
     requestIdHeader: "x-request-id",
-    trustProxy: true,
+    // Only the configured proxies may set the client address through X-Forwarded-For.
+    trustProxy: config.TRUST_PROXY ?? false,
     bodyLimit: 1_048_576,
   });
   const secureCookies = config.NODE_ENV === "production";
@@ -67,8 +79,9 @@ export async function buildApp(
   await app.register(authRoutes, {
     auth,
     secureCookies,
-    strictRateLimits: config.NODE_ENV !== "test",
+    strictRateLimits: options.strictRateLimits ?? config.NODE_ENV !== "test",
   });
+  await app.register(projectRoutes, { projects: new ProjectService(dependencies.db) });
 
   return app;
 }

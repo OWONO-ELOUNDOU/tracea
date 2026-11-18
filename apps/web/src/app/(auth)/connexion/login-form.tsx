@@ -6,10 +6,7 @@ import { useState } from "react";
 import { AuthCard, Message } from "@/components/auth/auth-card";
 import { PasswordField, SubmitButton, TextField } from "@/components/auth/fields";
 import { api, errorCode, errorMessage } from "@/lib/api";
-
-function safeNext(value: string | null): string {
-  return value !== null && value.startsWith("/") && !value.startsWith("//") ? value : "/projets";
-}
+import { safeNext } from "@/lib/redirect";
 
 export function LoginForm() {
   const router = useRouter();
