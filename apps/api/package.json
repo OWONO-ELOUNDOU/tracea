@@ -15,6 +15,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
+    "purge": "node dist/maintenance/cli.js",
+    "purge:dev": "tsx src/maintenance/cli.ts",
     "test": "vitest run"
   },
   "dependencies": {

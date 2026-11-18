@@ -14,7 +14,7 @@
 ### A.1 Conventions
 
 - Base : `https://api.tracea.app/v1` (préfixe `/api/v1` en monolithe).
-- JSON UTF-8 ; dates ISO 8601 UTC ; identifiants UUID v7 ; pagination par curseur (`?cursor=&limit=`).
+- JSON UTF-8 ; dates ISO 8601 UTC ; identifiants UUID v4 (aléatoires, 122 bits ; décision D4 du sprint 2) ; pagination par curseur (`?cursor=&limit=`).
 - Authentification par cookie de session `HttpOnly` ; mutations protégées par en-tête `X-CSRF-Token`.
 - Erreurs au format Problem Details (RFC 9457) :
   ```json
@@ -49,15 +49,62 @@
 
 ### A.3 Projets
 
-| Méthode | Route                        | Description                                                                                               |
-| ------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| GET     | `/projects`                  | Liste paginée des projets de l'utilisateur (`id, name, updatedAt, thumbnailUrl, currentVersion.number`)   |
-| POST    | `/projects`                  | `{ name }` → 201 projet vide                                                                              |
-| GET     | `/projects/{id}`             | Projet complet : description, paramètres, terrain, version courante (résumé), statut de la dernière tâche |
-| PATCH   | `/projects/{id}`             | `{ name?, descriptionText?, parameters?, site? }` — validation Zod des bornes                             |
-| POST    | `/projects/{id}/duplicate`   | → 201 copie avec la version courante                                                                      |
-| DELETE  | `/projects/{id}`             | → 204 (corbeille 30 jours)                                                                                |
-| POST    | `/projects/{id}/site/import` | `multipart/form-data` (GeoJSON ou DXF ≤ 5 Mo) → terrain proposé à confirmer                               |
+Contrat livré au sprint 2 (`docs/plans/sprint-2-projects.md` § 3). Routes montées à la racine, sans préfixe `/v1`, comme `/auth/*` et `/me` (décision ouverte D5) ; réponses enveloppées (D14).
+
+| Méthode | Route                        | Requête                                                                     | Succès                                                | Erreurs propres                                 | État                   |
+| ------- | ---------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------- | ---------------------- |
+| GET     | `/projects`                  | `?limit=` (1 à 50, défaut 20) et `?cursor=`                                 | 200 `{ items: ProjectSummary[], nextCursor }`         | 422 `VALIDATION_ERROR` (`limit`, `cursor`)      | Livré (sprint 2)       |
+| POST    | `/projects`                  | `{ name }`                                                                  | 201 `{ project: ProjectDetail }` + en-tête `Location` | 422 `VALIDATION_ERROR`                          | Livré (sprint 2)       |
+| GET     | `/projects/{id}`             | —                                                                           | 200 `{ project: ProjectDetail }`                      | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
+| PATCH   | `/projects/{id}`             | `{ name?, descriptionText? }`, au moins une clé                             | 200 `{ project: ProjectDetail }`                      | 404 `PROJECT_NOT_FOUND`, 422 `VALIDATION_ERROR` | Livré (sprint 2)       |
+| POST    | `/projects/{id}/duplicate`   | Corps vide                                                                  | 201 `{ project: ProjectDetail }` + en-tête `Location` | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
+| DELETE  | `/projects/{id}`             | —                                                                           | 204                                                   | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
+| PATCH   | `/projects/{id}`             | `parameters`, `site`                                                        | —                                                     | —                                               | Reporté (CU-03, CU-04) |
+| POST    | `/projects/{id}/site/import` | `multipart/form-data` (GeoJSON ou DXF ≤ 5 Mo) → terrain proposé à confirmer | —                                                     | —                                               | Reporté (CU-04)        |
+| —       | Restauration de la corbeille | —                                                                           | —                                                     | —                                               | Non planifié (D3)      |
+
+Erreurs communes : 401 `UNAUTHENTICATED` sans session valide ; 403 `CSRF_TOKEN_INVALID` sur `POST`, `PATCH`, `DELETE` sans en-tête `X-CSRF-Token` égal au cookie `tracea_csrf` ; 429 `RATE_LIMITED` (limite globale).
+
+```ts
+interface ProjectSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailUrl: string | null; // null tant que les vignettes n'existent pas
+  currentVersion: { number: number } | null;
+}
+
+interface ProjectDetail {
+  id: string;
+  name: string;
+  descriptionText: string | null;
+  parameters: Record<string, unknown> | null; // null tant que CU-03 n'est pas livré
+  site: Record<string, unknown> | null; // null tant que CU-04 n'est pas livré
+  createdAt: string;
+  updatedAt: string;
+  thumbnailUrl: string | null;
+  currentVersion: {
+    id: string;
+    number: number;
+    origin: "generated" | "edited" | "restored";
+    createdAt: string;
+  } | null;
+  lastJob: null; // réservé : la table jobs n'existe pas encore
+}
+```
+
+Règles :
+
+- **Isolation** : un projet inexistant, supprimé, appartenant à un autre utilisateur ou un `{id}` qui n'est pas un UUID reçoivent la même réponse 404 `PROJECT_NOT_FOUND` (« Projet introuvable »), au corps identique. Jamais 403. Chaque requête SQL filtre sur le propriétaire et `deleted_at` dans sa propre clause `WHERE`. `ownerId` et `deletedAt` ne sont jamais exposés.
+- **Validation** : schémas Zod stricts ; toute clé inconnue (`ownerId`, `id`, `parameters`, `site`, …) donne 422 avec `fields.<clé>`. `name` : espaces de bord retirés, 1 à 120 caractères, sans caractère de contrôle, doublons autorisés (D9). `descriptionText` : 0 à 2 000 caractères ou `null`.
+- **Liste** : projets non supprimés de l'utilisateur, triés par `updatedAt` décroissant puis `id` décroissant. `nextCursor` est une chaîne opaque (base64url de la dernière paire `updatedAt`, `id` de la page) ou `null` sur la dernière page ; un curseur illisible donne 422 `fields.cursor`. `projects.updated_at` est stocké à la milliseconde (`timestamp(3)`) pour que la valeur du curseur soit exacte : aucun projet n'est sauté ni répété quand plusieurs partagent le même `updatedAt`.
+- **Modification** : met à jour `updatedAt`.
+- **Duplication** : nouveau projet nommé `« <nom> (copie) »` (nom d'origine tronqué pour rester ≤ 120 caractères), mêmes `descriptionText`, `parameters`, `site` ; la version courante, s'il y en a une, est copiée comme version numéro 1 et devient la version courante. Une seule transaction.
+- **Suppression** : logique (corbeille de 30 jours, purge par tâche planifiée) ; un second `DELETE` répond 404.
+- **Audit** : `project.create`, `project.update` (liste des champs modifiés), `project.duplicate` (identifiant du projet source), `project.delete`, avec `target_type = "project"` ; ni nom ni description.
+
+Le document `GET /v1/openapi.json` décrit ces six routes avec leurs schémas de requête et de réponse (document tenu à la main, D13).
 
 ### A.4 Génération et versions
 

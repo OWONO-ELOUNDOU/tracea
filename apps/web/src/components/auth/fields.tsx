@@ -90,16 +90,19 @@ export function SubmitButton({
   children,
   pending,
   pendingLabel,
+  className = "h-10 w-full",
 }: {
   children: string;
   pending: boolean;
   pendingLabel: string;
+  /** Size and focus classes; full width by default (authentication forms). */
+  className?: string;
 }) {
   return (
     <button
       type="submit"
       disabled={pending}
-      className="h-10 w-full rounded-lg bg-primary font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+      className={`${className} rounded-lg bg-primary font-medium text-white hover:bg-primary/90 disabled:opacity-60`}
     >
       {pending ? pendingLabel : children}
     </button>

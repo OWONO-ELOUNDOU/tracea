@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "contract": "pnpm --filter @tracea/domain run contract && cd engine && uv run pytest tests/test_contract.py -q",
+    "e2e": "turbo run build --filter=@tracea/web && pnpm --filter @tracea/e2e e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

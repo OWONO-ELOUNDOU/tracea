@@ -1,16 +1,25 @@
+import { BuildingModelSchema, type BuildingModel } from "@tracea/domain";
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from "fastify";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { buildApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
-import { createEmbeddedDatabase, type DatabaseHandle } from "../src/db/client.js";
+import { createEmbeddedDatabase, type Database, type DatabaseHandle } from "../src/db/client.js";
 import { MemoryMailer } from "../src/mail/mailer.js";
 
 export interface TestContext {
   app: FastifyInstance;
+  db: Database;
   mailer: MemoryMailer;
   close: () => Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestContext> {
+export interface TestAppOptions {
+  env?: Record<string, string>;
+  strictRateLimits?: boolean;
+}
+
+export async function createTestApp(options: TestAppOptions = {}): Promise<TestContext> {
   const database: DatabaseHandle = await createEmbeddedDatabase();
   const mailer = new MemoryMailer();
   const app = await buildApp(
@@ -19,11 +28,14 @@ export async function createTestApp(): Promise<TestContext> {
       LOG_LEVEL: "error",
       SESSION_SECRET: "test-secret-test-secret-test-secret-1234",
       RATE_LIMIT_PER_MINUTE: "1000",
+      ...options.env,
     }),
     { db: database.db, mailer },
+    options.strictRateLimits === undefined ? {} : { strictRateLimits: options.strictRateLimits },
   );
   return {
     app,
+    db: database.db,
     mailer,
     close: async () => {
       await app.close();
@@ -78,4 +90,29 @@ export function extractToken(text: string, path: string): string {
   const match = new RegExp(`${path}\\?token=([A-Za-z0-9_%-]+)`).exec(text);
   if (match?.[1] === undefined) throw new Error(`no token link for ${path} in mail`);
   return decodeURIComponent(match[1]);
+}
+
+const TEST_PASSWORD = "plan-de-masse-2026!";
+
+/** Registers an account, verifies its address and returns a logged-in client. */
+export async function createLoggedInClient(ctx: TestContext, email: string): Promise<Client> {
+  const client = new Client(ctx.app);
+  await client.csrf();
+  await client.request("POST", "/auth/register", { email, password: TEST_PASSWORD });
+  const mail = ctx.mailer.lastTo(email);
+  if (mail === undefined) throw new Error(`no verification mail for ${email}`);
+  const token = extractToken(mail.text, "/verification");
+  await client.request("POST", "/auth/verify-email", { token });
+  const login = await client.request("POST", "/auth/login", { email, password: TEST_PASSWORD });
+  if (login.statusCode !== 200) throw new Error(`login failed for ${email}`);
+  return client;
+}
+
+/** Reference BuildingModel shared with the contract tests of @tracea/domain. */
+export function loadFixtureModel(): BuildingModel {
+  const path = resolve(
+    import.meta.dirname,
+    "../../../packages/domain/fixtures/house-rectangular.json",
+  );
+  return BuildingModelSchema.parse(JSON.parse(readFileSync(path, "utf8")));
 }

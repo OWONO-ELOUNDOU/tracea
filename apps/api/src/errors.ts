@@ -48,6 +48,13 @@ export const errors = {
         : "Ce mot de passe est trop courant ; choisissez-en un autre.",
       { password: reason === "too_short" ? "trop court" : "trop courant" },
     ),
+  projectNotFound: () =>
+    new ApiError(
+      404,
+      "PROJECT_NOT_FOUND",
+      "Projet introuvable",
+      "Ce projet n'existe pas ou n'est plus disponible.",
+    ),
   validation: (fields: Record<string, string>) =>
     new ApiError(
       422,
