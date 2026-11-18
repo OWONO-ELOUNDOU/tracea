@@ -9,6 +9,8 @@ docker compose up --build
 
 Services : `web` (3000), `api` (3001), `engine-worker`, `postgres` (5432), `redis` (6379), `minio` (9000, console 9001), `mailpit` (SMTP 1025, interface 8025).
 
+Purge quotidienne (sessions expirées, corbeille de plus de 30 jours), lancée à la demande en local : `docker compose run --rm purge` (profil `maintenance`, même image que `api`). En staging et production, un planificateur externe lance la même commande une fois par jour : voir `docs/ops/sprint-2-projects.md`.
+
 Les identifiants présents dans `docker-compose.yml` (`tracea/tracea`, `minioadmin`) servent uniquement au poste développeur. Staging et production reçoivent leurs secrets du gestionnaire de la plateforme ; aucun n'est versionné.
 
 ## Images
@@ -23,4 +25,4 @@ Les dépendances natives du moteur (IfcOpenShell, cairo) seront ajoutées à `en
 
 ## CI
 
-`.github/workflows/ci.yml` : `lint`, `test`, `contract`, `build`, `security`. Les jobs `e2e` et `deploy` sont ajoutés avec le premier parcours utilisateur et le premier environnement de staging.
+`.github/workflows/ci.yml` : `lint`, `test`, `contract`, `e2e`, `build`, `security`, avec un jeton en lecture seule (`permissions: contents: read`). Le job `deploy` est ajouté avec le premier environnement de staging.

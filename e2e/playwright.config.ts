@@ -8,7 +8,8 @@ const isCI = process.env.CI !== undefined;
 /**
  * `pnpm e2e` (repository root) builds the web app, then this config starts the stack:
  * - API: production app on an embedded database with verified test accounts (apps/api/test/e2e-server.ts);
- * - web: `next start` on the production build, which calls the API at its default URL.
+ * - web: the standalone server of the production build, as in the `web` image
+ *   (infra/docker/web.Dockerfile), which calls the API at its default URL.
  * Ports are the defaults (3000 / 3001) so the web build needs no e2e-specific setting; existing
  * servers are never reused, so a running dev stack makes the run fail instead of hitting the wrong API.
  */
@@ -43,7 +44,12 @@ export default defineConfig({
       stdout: "pipe",
     },
     {
-      command: "pnpm --filter @tracea/web start",
+      // `next start` does not support `output: "standalone"`. Like the image, copy the static
+      // assets next to the standalone server, then run it.
+      command:
+        "cp -R .next/static .next/standalone/apps/web/.next/ && node .next/standalone/apps/web/server.js",
+      cwd: "../apps/web",
+      env: { PORT: "3000", HOSTNAME: "localhost" },
       url: `${WEB_URL}/connexion`,
       reuseExistingServer: false,
       timeout: 60_000,

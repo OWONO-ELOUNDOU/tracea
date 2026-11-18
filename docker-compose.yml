@@ -17,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile
+    # Named so that the one-off `purge` service reuses the same image.
+    image: tracea-api:local
     ports:
       - "3001:3001"
     env_file: .env
@@ -25,6 +27,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
       SMTP_URL: smtp://mailpit:1025
+      # The browser calls the API directly on port 3001: no reverse proxy is trusted locally,
+      # whatever `.env` says (docs/ops/sprint-2-projects.md).
+      TRUST_PROXY: ""
     depends_on:
       postgres:
         condition: service_healthy
@@ -37,6 +42,33 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # Daily purge (decision D7), run on demand only: `docker compose run --rm purge`.
+  # Same image and command as the scheduled job in staging and production.
+  purge:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    image: tracea-api:local
+    profiles: [maintenance]
+    command: ["node", "dist/maintenance/cli.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://tracea:tracea@postgres:5432/tracea
+    restart: "no"
+    # The image health check probes the HTTP server, which this one-off command does not start.
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # The purge never migrates: a healthy API means migrations are applied.
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256m
 
   engine-worker:
     build:

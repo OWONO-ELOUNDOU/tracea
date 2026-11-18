@@ -1,10 +1,10 @@
 # Tracea — Sprint 1 : compte et authentification (CU-01, EF-100)
 
-| Champ    | Valeur                                                                                                       |
-| -------- | ------------------------------------------------------------------------------------------------------------ |
-| Date     | 16 novembre 2026                                                                                             |
-| Livrable | Archive `tracea-sprint-1.zip` (dépôt git : `main` → sprint 0, `develop` → sprint 1 fusionné, `feature/auth`) |
-| Statut   | Approuvé par la chaîne planificateur → designer → frontend/backend → QA → sécurité → DevOps → réviseur       |
+| Champ    | Valeur                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------ |
+| Date     | 16 novembre 2026                                                                                       |
+| Livrable | Dépôt git : `main` → sprint 0, `develop` → sprint 1 fusionné, branche `feature/auth`                   |
+| Statut   | Approuvé par la chaîne planificateur → designer → frontend/backend → QA → sécurité → DevOps → réviseur |
 
 ## Décisions prises
 
@@ -15,7 +15,7 @@
 
 ## Ce qui a été livré
 
-- **Dépôt initialisé** : premier commit `chore: bootstrap…` sur `main`, branche `develop`, sprint 1 en squash merge `feat(auth): …`. Auteur configuré localement sur l'adresse du porteur ; le nom (`Hermann Owono`) est à corriger si besoin via `git config user.name` puis `git commit --amend --reset-author`.
+- **Dépôt initialisé** : premier commit `chore: bootstrap…` sur `main`, branche `develop`, sprint 1 en squash merge `feat(auth): …`.
 - **Documents de référence** versés dans `docs/specs/reference/` (contexte, cahier des charges, architecture, modèle et exports, API et qualité).
 - **API** : `users`, `sessions`, `email_tokens`, `audit_log` (Drizzle, migration `0000_init_auth`), routes `/auth/csrf`, `register`, `resend-verification`, `verify-email`, `login`, `logout`, `logout-all`, `password/forgot`, `password/reset`, `GET/PATCH /me` ; réponses non révélatrices (adresse existante ou non) ; limitation de débit par route ; e-mails via port `Mailer` (SMTP + mémoire pour les tests). 17 tests.
 - **Web** : pages `/connexion`, `/inscription`, `/mot-de-passe-oublie`, `/reinitialisation`, `/verification`, page `/projets` provisoire, client API avec CSRF ; jetons de couleur des fondations v0.1 (`paper #F4F1EA`, `primary #1E4A6E`, `accent #C97A2B`).
@@ -27,11 +27,11 @@
 
 Lint, typage, formatage, tests : verts (40 tests TypeScript, 20 Python) ; build Next.js OK (6 routes) ; audits : 0 vulnérabilité haute/critique (2 modérées sur l'outillage de développement).
 
-## Points à trancher par le porteur du projet
+## Points ouverts à la clôture du sprint
 
-1. **Outil de maquettes** : les instructions du projet citent Google Stitch, le document des maquettes v0.1 est un fichier Figma. Lequel fait foi ? Les copies versionnées des documents parlent de « maquettes » sans nommer d'outil en attendant.
+1. **Outil de maquettes** : tranché depuis (décision D1 du sprint 2, 17 novembre 2026) — le fichier Figma « Tracea — Maquettes v0.1 » fait foi.
 2. Ajouter l'écran « 05 · Connexion / Inscription » aux maquettes.
-3. Relier le dépôt GitHub (non relié à cette session) pour pousser `main` et `develop` et activer la CI.
+3. Pousser `main` et `develop` sur le dépôt GitHub et activer la CI.
 
 ## Sprint 2 proposé
 
