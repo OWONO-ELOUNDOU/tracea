@@ -7,6 +7,17 @@
 | Date      | 18 novembre 2026                                         |
 | Référence | `docs/plans/sprint-2-projects.md` (S2-10, décision D7)   |
 | Statut    | Prêt pour staging ; vérification compose à faire (§ 8.2) |
+| Révision  | 19 novembre 2026 (S3-12), voir l'encadré ci-dessous      |
+
+> **Révision du 19 novembre 2026 (S3-12).** Le sprint 3 a modifié la purge et la configuration ; le texte d'origine ci-dessous est conservé, les passages devenus faux sont signalés par un encadré « Révisé » à leur place :
+>
+> - la commande de purge ne valide plus toute la configuration de l'API : elle ne lit que `DATABASE_URL` (obligatoire, sans valeur par défaut) et `LOG_LEVEL` ; **`SESSION_SECRET` n'est plus exigé** et ne doit plus lui être transmis (A8, S2-SEC-08) ;
+> - elle supprime aussi les jetons d'e-mail expirés ou utilisés depuis plus de 7 jours : la ligne de succès porte **trois** compteurs, dont `emailTokensDeleted` (S2-SEC-12) ;
+> - le service compose `purge` **ne lit plus `.env`** ;
+> - `TRUST_PROXY=false` (et `no`, `off`, `none`) est **refusé au démarrage** avec un message explicite (A10) ;
+> - la tâche planifiée reçoit son propre secret (`DATABASE_URL` du rôle `tracea_purge`), sans `SESSION_SECRET`.
+>
+> Référence : `docs/ops/sprint-3-project-description.md` (§ 4 purge, § 5 `TRUST_PROXY`). Les résultats du § 8.1 restent ceux du 18 novembre 2026.
 
 ## 1. Changements
 
@@ -89,6 +100,8 @@ La commande valide **toute** la configuration de l'API (`loadConfig()`), même l
 
 Le plus simple : donner à la tâche **le même jeu de secrets que l'API** (même référence au gestionnaire de secrets de la plateforme). Rien n'est versionné.
 
+> **Révisé le 19 novembre 2026.** Ce paragraphe ne s'applique plus à partir de l'image du sprint 3 : la commande lit seulement `DATABASE_URL` (obligatoire) et `LOG_LEVEL` ; `SESSION_SECRET` et `TRUST_PROXY` sont ignorés. Ne plus partager le secret de l'API : la tâche reçoit son propre secret, avec la `DATABASE_URL` du rôle `tracea_purge`. Voir `docs/ops/sprint-3-project-description.md` § 4.2 et § 4.5.
+
 ### 3.3 Base non migrée
 
 La commande **n'applique jamais les migrations** (deux processus qui migrent en même temps ne sont pas sûrs, § 2.1). Comportement vérifié (§ 8.1) :
@@ -136,11 +149,16 @@ spec:
                   memory: 256Mi
 ```
 
+> **Révisé le 19 novembre 2026.** Remplacer `envFrom` (secret entier de l'API) par les deux seules variables `DATABASE_URL` (secret `tracea-purge`) et `LOG_LEVEL: info` : exemple dans `docs/ops/sprint-3-project-description.md` § 4.2.
+
 ### 3.5 Vérifier son exécution
 
 - **Journal** (une seule ligne JSON par exécution, compteurs seulement, aucune donnée de ligne) :
   - succès : `{"time":…,"level":30,"msg":"purge completed","sessionsDeleted":N,"projectsDeleted":M}` ;
   - échec : `{"time":…,"level":50,"msg":"purge failed","err":"…"}`.
+
+  > **Révisé le 19 novembre 2026.** Depuis le sprint 3, la ligne de succès porte trois compteurs : `{"time":…,"level":30,"msg":"purge completed","sessionsDeleted":N,"projectsDeleted":M,"emailTokensDeleted":K}`. La ligne d'échec est écrite quel que soit `LOG_LEVEL` ; la ligne de succès, elle, disparaît au-dessus de `info` : garder `LOG_LEVEL=info` pour que l'alerte d'absence fonctionne. Contrôle SQL des jetons : `docs/ops/sprint-3-project-description.md` § 4.4.
+
 - **Statut de la tâche** sur la plateforme (Kubernetes : `kubectl get jobs -l` … / `kubectl logs job/<nom>`).
 - **Alerte à poser** : aucune ligne `purge completed` depuis 26 heures, ou une ligne `level: 50`.
 - **Contrôle SQL** juste après une exécution réussie :
@@ -159,6 +177,8 @@ docker compose run --rm purge
 
 Le service `purge` n'est pas lancé par `docker compose up` (profil `maintenance`). `run` démarre ses dépendances et attend une API saine, donc une base migrée. Il lit `.env` (pour `SESSION_SECRET`) et la même `DATABASE_URL` que `api`. Sans Docker : `pnpm --filter @tracea/api purge:dev` (avec `.env` chargé dans l'environnement).
 
+> **Révisé le 19 novembre 2026.** Le service `purge` ne lit plus `.env` : il reçoit seulement `DATABASE_URL` (même base que `api`) et `LOG_LEVEL`, interpolée depuis `.env` ou le shell (`info` par défaut). Sans Docker, seule `DATABASE_URL` est nécessaire.
+
 ## 4. `TRUST_PROXY` par environnement
 
 | Environnement               | Valeur                                                                              | Raison                                                                |
@@ -173,6 +193,7 @@ Règles :
 
 - Syntaxe `proxy-addr` : liste séparée par des virgules d'adresses, de plages CIDR, ou `loopback`, `linklocal`, `uniquelocal`.
 - **Jamais de nombre de sauts** : Fastify ignore une valeur numérique et ne fait alors confiance à personne (tous les clients partagent le compteur du répartiteur). L'API refuse `1`, `true`, `*`, `0.0.0.0/0`, `::/0` au démarrage. `false` passe la validation mais fait échouer le démarrage (A10) : laisser vide à la place.
+  > **Révisé le 19 novembre 2026.** `false`, `no`, `off` et `none` sont désormais refusés dès la validation, avec un message qui indique de laisser `TRUST_PROXY` vide (A10 soldé).
 - **Exigence réseau** : l'API ne doit être joignable **que** par ce mandataire. Pas de port de nœud, pas d'adresse publique directe, pas d'autre service dans la plage de confiance capable d'envoyer du trafic arbitraire ; règle de pare-feu, groupe de sécurité ou `NetworkPolicy` n'admettant en entrée du port 3001 que la plage du répartiteur. Sinon la plage de confiance devient falsifiable et les limites de débit tombent.
 - Si la plateforme ne publie pas d'adresses stables pour son répartiteur, `uniquelocal` n'est admissible que si le réseau de l'API est privé et réservé au répartiteur ; sinon, revenir vers le rôle sécurité avant la mise en service.
 - La valeur est **à fixer au choix de la plateforme** (premier staging) ; elle n'est pas connue aujourd'hui.
@@ -216,11 +237,14 @@ En le faisant, un second défaut est apparu : Next.js déduit la racine du monor
 - **Fait** : `permissions: contents: read` au niveau du flux ; tous les jobs reçoivent un jeton en lecture seule. Le job `security` déclare `contents: read` et `pull-requests: read` (gitleaks liste les commits de la PR par l'API ; une déclaration au niveau d'un job remplace celle du flux). Sans `pull-requests: write`, gitleaks ne peut pas commenter la PR : une fuite fait toujours échouer le job, le détail est dans le journal du job.
 - **Non fait, à planifier** : épinglage des actions par empreinte de commit (`actions/checkout`, `pnpm/action-setup`, `actions/setup-node`, `astral-sh/setup-uv`, `actions/cache`, `actions/upload-artifact`, `docker/setup-buildx-action`, `gitleaks/gitleaks-action`). Les empreintes n'ont pas pu être résolues ici de façon vérifiable (pas d'accès GitHub) ; aucune empreinte n'a été inscrite. À faire depuis un poste avec accès : `git ls-remote https://github.com/<action>.git refs/tags/<étiquette>` (déréférencer les étiquettes annotées, `^{}`), inscrire `uses: <action>@<empreinte> # <étiquette>`, puis activer Dependabot (`package-ecosystem: github-actions`) pour les tenir à jour.
 
+> **Révisé le 19 novembre 2026.** Fait au sprint 3 : actions épinglées par empreinte (vérifiées par `git ls-remote`) et `.github/dependabot.yml` ajouté. Voir `docs/ops/sprint-3-project-description.md` § 7.
+
 ## 7. Procédure de déploiement
 
 Staging (automatique sur `develop`, dès que le job `deploy` existera) puis production (étiquette `vX.Y.Z` sur `main`, avec approbation), après validation en staging :
 
 1. Vérifier que les secrets de l'environnement contiennent `DATABASE_URL`, `SESSION_SECRET`, et fixer `TRUST_PROXY` (§ 4) avec la règle réseau associée.
+   > **Révisé le 19 novembre 2026.** Ces secrets sont ceux de l'API. La tâche de purge (étape 5) a son propre secret, `DATABASE_URL` du rôle `tracea_purge`, sans `SESSION_SECRET` : `docs/ops/sprint-3-project-description.md` § 2.5.
 2. Déployer `tracea-api:<sha>` en mise à jour progressive, **une instance nouvelle d'abord** (§ 2.1) ; attendre `/health` → 200.
 3. Contrôler la migration (§ 2.2).
 4. Déployer `tracea-web:<sha>`.
@@ -260,6 +284,7 @@ Sur un poste avec Docker, consigner le résultat dans cette note :
 6. **Purge sur base non migrée** : `docker compose run --rm --no-deps purge` sur un volume neuf avant le premier démarrage de l'API → sortie 1, `relation "sessions" does not exist`.
 7. **Image `web`** avec `outputFileTracingRoot` : `docker compose build web` puis page de connexion servie avec ses styles.
 8. **`TRUST_PROXY` forcé** : avec `TRUST_PROXY=1` dans `.env`, l'API compose démarre quand même (valeur vide imposée par le compose) ; le service `purge`, lui, lit `.env` et échouerait : laisser `TRUST_PROXY=` vide dans `.env`.
+   > **Révisé le 19 novembre 2026.** Le service `purge` ne lit plus `.env` et la commande ignore `TRUST_PROXY` : avec `TRUST_PROXY=1` dans `.env`, la purge doit réussir. Ce point et les compléments du sprint 3 sont repris dans `docs/ops/sprint-3-project-description.md` § 9.2.
 
 Non vérifiables ici non plus : exécution réelle des jobs CI (cache Playwright, artefacts, gitleaks avec le jeton restreint), au premier passage de la PR.
 
@@ -275,3 +300,5 @@ Non vérifiables ici non plus : exécution réelle des jobs CI (cache Playwright
 | Verrou de migration (verrou consultatif PostgreSQL autour du migrateur) si le déploiement multi-instances le demande   | Backend, devops | À la mise en production       |
 | S2-SEC-12 : purge des jetons d'e-mail (troisième compteur, journal à adapter)                                          | Backend         | Sprint 3                      |
 | A10 : message explicite pour `TRUST_PROXY=false`                                                                       | Backend         | Sprint 3                      |
+
+> **Révisé le 19 novembre 2026.** Soldés au sprint 3 : épinglage et Dependabot, A8, S2-SEC-12, A10. Toujours ouverts : vérifications compose, manifeste et job `deploy`, valeur de `TRUST_PROXY`, métrique de la purge, verrou de migration. Suites à jour : `docs/ops/sprint-3-project-description.md` § 10.

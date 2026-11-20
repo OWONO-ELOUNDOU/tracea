@@ -10,7 +10,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schema/building-model.schema.json": "./schema/building-model.schema.json"
+    "./schema/building-model.schema.json": "./schema/building-model.schema.json",
+    "./schema/project-parameters.schema.json": "./schema/project-parameters.schema.json",
+    "./schema/project-site.schema.json": "./schema/project-site.schema.json"
   },
   "files": [
     "dist",
@@ -22,7 +24,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "schema": "tsx scripts/export-schema.ts",
+    "schema": "tsx scripts/export-schema.ts && prettier --write schema",
     "contract": "tsx scripts/check-fixtures.ts"
   },
   "dependencies": {

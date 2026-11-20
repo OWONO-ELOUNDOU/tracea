@@ -24,10 +24,22 @@
     "status": 422,
     "code": "PROGRAM_CONTRADICTION",
     "detail": "3 chambres de 20 m² minimum ne tiennent pas dans 60 m² habitables.",
-    "fields": { "parameters.rooms[1].minArea": "trop élevé pour la surface cible" }
+    "fields": { "parameters.rooms.1.minArea": "trop élevé pour la surface cible" }
   }
   ```
-- Limitation de débit : 60 req/min par session, 10 générations/heure par utilisateur en plan gratuit ; en-têtes `RateLimit-*`.
+- `fields` (réponses 422) : au plus 20 entrées, dans l'ordre des contrôles ; une clé de plus de 64 caractères est tronquée et se termine par « … ». Une réponse 422 reste donc courte quelle que soit la taille du corps refusé (sprint 3, S2-SEC-06).
+- Erreurs de requête détectées avant la route : jamais le nom, le code ni le message internes du cadriciel ; le code d'origine est seulement journalisé (niveau `info`). Correspondance (sprint 3, S2-SEC-05) :
+
+  | Cause                                                                                                 | Statut           | `code`                   | `title`                            |
+  | ----------------------------------------------------------------------------------------------------- | ---------------- | ------------------------ | ---------------------------------- |
+  | JSON mal formé, corps JSON vide, clé `__proto__` ou `constructor.prototype`, longueur annoncée fausse | 400              | `INVALID_BODY`           | Corps de requête invalide          |
+  | Corps de plus de 1 Mio                                                                                | 413              | `PAYLOAD_TOO_LARGE`      | Corps de requête trop volumineux   |
+  | Tout type de contenu autre que `application/json` (`text/plain`, formulaire…), après session et CSRF  | 415              | `UNSUPPORTED_MEDIA_TYPE` | Type de contenu non pris en charge |
+  | Toute autre erreur 4xx hors code métier (URL mal encodée, par exemple)                                | statut d'origine | `REQUEST_ERROR`          | Requête invalide                   |
+
+- `fields` : chemins séparés par des points, index de tableau compris (`parameters.rooms.1.minArea`, `site.boundary.width`) ; une clé inconnue est signalée sous son propre chemin avec « Champ non autorisé. ».
+- Mise en cache : toutes les réponses de l'API portent `Cache-Control: no-store` (données personnelles, `ETag`), sauf si une route pose sa propre valeur (sprint 3, S3-SEC-02).
+- Limitation de débit : 60 req/min par **adresse IP** (limite globale, `RATE_LIMIT_PER_MINUTE` ; la clé par session prévue à l'origine reste une décision ouverte, D29), 10 générations/heure par utilisateur en plan gratuit ; en-têtes `RateLimit-*`.
 - Versionnage : préfixe `/v1` ; changements cassants → `/v2`.
 - Spécification OpenAPI 3.1 générée depuis les schémas Zod et publiée sur `/v1/openapi.json`.
 
@@ -49,21 +61,20 @@
 
 ### A.3 Projets
 
-Contrat livré au sprint 2 (`docs/plans/sprint-2-projects.md` § 3). Routes montées à la racine, sans préfixe `/v1`, comme `/auth/*` et `/me` (décision ouverte D5) ; réponses enveloppées (D14).
+Contrat livré au sprint 2 (`docs/plans/sprint-2-projects.md` § 3) et étendu au sprint 3 (`docs/plans/sprint-3-project-description.md` § 3 : paramètres, terrain, `ETag` / `If-Match`). Routes montées à la racine, sans préfixe `/v1`, comme `/auth/*` et `/me` (décision ouverte D5) ; réponses enveloppées (D14).
 
-| Méthode | Route                        | Requête                                                                     | Succès                                                | Erreurs propres                                 | État                   |
-| ------- | ---------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------- | ---------------------- |
-| GET     | `/projects`                  | `?limit=` (1 à 50, défaut 20) et `?cursor=`                                 | 200 `{ items: ProjectSummary[], nextCursor }`         | 422 `VALIDATION_ERROR` (`limit`, `cursor`)      | Livré (sprint 2)       |
-| POST    | `/projects`                  | `{ name }`                                                                  | 201 `{ project: ProjectDetail }` + en-tête `Location` | 422 `VALIDATION_ERROR`                          | Livré (sprint 2)       |
-| GET     | `/projects/{id}`             | —                                                                           | 200 `{ project: ProjectDetail }`                      | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
-| PATCH   | `/projects/{id}`             | `{ name?, descriptionText? }`, au moins une clé                             | 200 `{ project: ProjectDetail }`                      | 404 `PROJECT_NOT_FOUND`, 422 `VALIDATION_ERROR` | Livré (sprint 2)       |
-| POST    | `/projects/{id}/duplicate`   | Corps vide                                                                  | 201 `{ project: ProjectDetail }` + en-tête `Location` | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
-| DELETE  | `/projects/{id}`             | —                                                                           | 204                                                   | 404 `PROJECT_NOT_FOUND`                         | Livré (sprint 2)       |
-| PATCH   | `/projects/{id}`             | `parameters`, `site`                                                        | —                                                     | —                                               | Reporté (CU-03, CU-04) |
-| POST    | `/projects/{id}/site/import` | `multipart/form-data` (GeoJSON ou DXF ≤ 5 Mo) → terrain proposé à confirmer | —                                                     | —                                               | Reporté (CU-04)        |
-| —       | Restauration de la corbeille | —                                                                           | —                                                     | —                                               | Non planifié (D3)      |
+| Méthode | Route                        | Requête                                                                                             | Succès                                                          | Erreurs propres                                                         | État                                  |
+| ------- | ---------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------- |
+| GET     | `/projects`                  | `?limit=` (1 à 50, défaut 20) et `?cursor=`                                                         | 200 `{ items: ProjectSummary[], nextCursor }`                   | 422 `VALIDATION_ERROR` (`limit`, `cursor`)                              | Livré (sprint 2)                      |
+| POST    | `/projects`                  | `{ name }`                                                                                          | 201 `{ project: ProjectDetail }`, en-têtes `Location` et `ETag` | 422 `VALIDATION_ERROR`                                                  | Livré (sprint 2 ; `ETag` au sprint 3) |
+| GET     | `/projects/{id}`             | —                                                                                                   | 200 `{ project: ProjectDetail }`, en-tête `ETag`                | 404 `PROJECT_NOT_FOUND`                                                 | Livré (sprint 3)                      |
+| PATCH   | `/projects/{id}`             | `{ name?, descriptionText?, parameters?, site? }`, au moins une clé ; en-tête `If-Match` facultatif | 200 `{ project: ProjectDetail }`, en-tête `ETag`                | 404 `PROJECT_NOT_FOUND`, 412 `PROJECT_MODIFIED`, 422 `VALIDATION_ERROR` | Livré (sprint 3)                      |
+| POST    | `/projects/{id}/duplicate`   | Corps vide                                                                                          | 201 `{ project: ProjectDetail }`, en-têtes `Location` et `ETag` | 404 `PROJECT_NOT_FOUND`                                                 | Livré (sprint 2 ; `ETag` au sprint 3) |
+| DELETE  | `/projects/{id}`             | —                                                                                                   | 204                                                             | 404 `PROJECT_NOT_FOUND`                                                 | Livré (sprint 2)                      |
+| POST    | `/projects/{id}/site/import` | `multipart/form-data` (GeoJSON ou DXF ≤ 5 Mo) → terrain proposé à confirmer                         | —                                                               | —                                                                       | Reporté (CU-04)                       |
+| —       | Restauration de la corbeille | —                                                                                                   | —                                                               | —                                                                       | Non planifié (D3)                     |
 
-Erreurs communes : 401 `UNAUTHENTICATED` sans session valide ; 403 `CSRF_TOKEN_INVALID` sur `POST`, `PATCH`, `DELETE` sans en-tête `X-CSRF-Token` égal au cookie `tracea_csrf` ; 429 `RATE_LIMITED` (limite globale).
+Erreurs communes : 401 `UNAUTHENTICATED` sans session valide ; 403 `CSRF_TOKEN_INVALID` sur `POST`, `PATCH`, `DELETE` sans en-tête `X-CSRF-Token` égal au cookie `tracea_csrf` ; 400, 413, 415 traduites (§ A.1) ; 429 `RATE_LIMITED` (limite globale).
 
 ```ts
 interface ProjectSummary {
@@ -79,8 +90,8 @@ interface ProjectDetail {
   id: string;
   name: string;
   descriptionText: string | null;
-  parameters: Record<string, unknown> | null; // null tant que CU-03 n'est pas livré
-  site: Record<string, unknown> | null; // null tant que CU-04 n'est pas livré
+  parameters: ProjectParameters | null; // forme stockée, sans valeur par défaut ; null = non saisi
+  site: ProjectSite | null; // forme stockée, valeurs par défaut appliquées ; null = non saisi
   createdAt: string;
   updatedAt: string;
   thumbnailUrl: string | null;
@@ -97,14 +108,18 @@ interface ProjectDetail {
 Règles :
 
 - **Isolation** : un projet inexistant, supprimé, appartenant à un autre utilisateur ou un `{id}` qui n'est pas un UUID reçoivent la même réponse 404 `PROJECT_NOT_FOUND` (« Projet introuvable »), au corps identique. Jamais 403. Chaque requête SQL filtre sur le propriétaire et `deleted_at` dans sa propre clause `WHERE`. `ownerId` et `deletedAt` ne sont jamais exposés.
-- **Validation** : schémas Zod stricts ; toute clé inconnue (`ownerId`, `id`, `parameters`, `site`, …) donne 422 avec `fields.<clé>`. `name` : espaces de bord retirés, 1 à 120 caractères, sans caractère de contrôle, doublons autorisés (D9). `descriptionText` : 0 à 2 000 caractères ou `null`.
+- **Validation** : schémas Zod stricts ; toute clé inconnue (`ownerId`, `id`, `deletedAt`, …) donne 422 avec `fields.<clé>`. Les schémas `name`, `descriptionText`, `parameters` et `site` sont ceux de `@tracea/domain` (`ProjectNameSchema`, `DescriptionTextSchema`, `ProjectParametersSchema`, `ProjectSiteSchema`), partagés avec l'écran ; leurs bornes, valeurs par défaut et messages sont décrits au § 2.4 de la spécification du modèle. `name` : espaces de bord retirés, 1 à 120 caractères, sans caractère de contrôle, doublons autorisés (D9). `descriptionText` : 0 à 2 000 caractères ou `null`. Une moitié de paire de substitution isolée (caractère incomplet, souvent un émoji coupé) est refusée en 422 dans `name` et `descriptionText` (sprint 3, S3-SEC-03). Les longueurs de `name` et `descriptionText` sont comptées en points de code Unicode : un émoji simple compte pour un caractère, un émoji composé pour chacun de ses points de code (sprint 3, A9).
 - **Liste** : projets non supprimés de l'utilisateur, triés par `updatedAt` décroissant puis `id` décroissant. `nextCursor` est une chaîne opaque (base64url de la dernière paire `updatedAt`, `id` de la page) ou `null` sur la dernière page ; un curseur illisible donne 422 `fields.cursor`. `projects.updated_at` est stocké à la milliseconde (`timestamp(3)`) pour que la valeur du curseur soit exacte : aucun projet n'est sauté ni répété quand plusieurs partagent le même `updatedAt`.
-- **Modification** : met à jour `updatedAt`.
-- **Duplication** : nouveau projet nommé `« <nom> (copie) »` (nom d'origine tronqué pour rester ≤ 120 caractères), mêmes `descriptionText`, `parameters`, `site` ; la version courante, s'il y en a une, est copiée comme version numéro 1 et devient la version courante. Une seule transaction.
+- **Modification** : chaque groupe présent (`name`, `descriptionText`, `parameters`, `site`) remplace la valeur stockée en entier, sans fusion ; `null` efface `descriptionText`, `parameters` ou `site`. Le client envoie toujours l'objet complet d'un groupe. `parameters` est stocké tel que reçu (`{}` est valide) ; `site` est stocké complété par ses valeurs par défaut. Une zone constructible vide est acceptée (D28). Chaque modification réussie fait strictement croître `updatedAt` (`greatest(now(), updated_at + 1 ms)`), même pour deux requêtes dans la même milliseconde.
+- **Ordre des contrôles de `PATCH`** : session (401) → CSRF (403) → corps (400, 413, 415, puis 422) → existence et propriétaire (404) → `If-Match` (412). Un `{id}` qui n'est pas un UUID accompagné d'un corps invalide donne donc 422, et 404 si le corps est valide (A5).
+- **Lecture** : la valeur stockée est renvoyée telle quelle, sans revalidation (toutes les écritures sont validées).
+- **Concurrence (`ETag` / `If-Match`, D16)** : `GET`, `PATCH`, `POST /projects` et `POST /projects/{id}/duplicate` renvoient un `ETag` fort et opaque, dérivé de `updatedAt` ; il change à chaque modification réussie. Avec `If-Match`, `PATCH` n'a lieu que si l'`ETag` courant figure parmi les valeurs envoyées (comparaison forte), dans la même instruction `UPDATE` que le filtre propriétaire ; sinon 412 `PROJECT_MODIFIED` (« Projet modifié ailleurs », « Ce projet a été modifié depuis une autre fenêtre. Rechargez-le pour retrouver la dernière version. ») et projet inchangé. `If-Match: *` correspond à tout projet existant ; une étiquette faible (`W/"…"`) ou mal formée ne correspond jamais (412). Sans `If-Match`, le dernier écrit gagne (comportement du sprint 2, utilisé par le renommage depuis « Mes projets »). Sur le projet d'un autre utilisateur, `If-Match` donne la même 404 qu'un identifiant inexistant, jamais 412.
+- **CORS** : `If-Match` figure parmi les en-têtes admis ; `ETag` et `Location` sont exposés au client.
+- **Duplication** : nouveau projet nommé `« <nom> (copie) »` (nom d'origine tronqué, en points de code, pour rester ≤ 120 caractères), mêmes `descriptionText`, `parameters`, `site` ; la version courante, s'il y en a une, est copiée comme version numéro 1 et devient la version courante. Une seule transaction.
 - **Suppression** : logique (corbeille de 30 jours, purge par tâche planifiée) ; un second `DELETE` répond 404.
-- **Audit** : `project.create`, `project.update` (liste des champs modifiés), `project.duplicate` (identifiant du projet source), `project.delete`, avec `target_type = "project"` ; ni nom ni description.
+- **Audit** : `project.create`, `project.update` (une ligne par `PATCH` réussi ; `metadata.fields` liste les groupes modifiés parmi `name`, `descriptionText`, `parameters`, `site`, jamais leur contenu, D25), `project.duplicate` (identifiant du projet source), `project.delete`, avec `target_type = "project"` ; ni nom ni description.
 
-Le document `GET /v1/openapi.json` décrit ces six routes avec leurs schémas de requête et de réponse (document tenu à la main, D13).
+Le document `GET /v1/openapi.json` décrit ces six routes avec leurs schémas de requête et de réponse, les en-têtes `ETag` et `If-Match` et la réponse 412. Il est tenu à la main (D13), à l'exception des composants `ProjectParameters` et `ProjectSite`, produits par `z.toJSONSchema` depuis `@tracea/domain` (forme d'entrée ; les règles qui portent sur plusieurs champs restent vérifiées par l'API).
 
 ### A.4 Génération et versions
 

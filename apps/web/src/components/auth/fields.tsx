@@ -8,7 +8,7 @@ interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
   error?: string;
 }
 
-const inputClass =
+export const inputClass =
   "h-10 w-full rounded-lg border border-line bg-white px-3 text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/30 aria-[invalid=true]:border-danger";
 
 export function TextField({ label, help, error, ...props }: FieldProps) {

@@ -1,3 +1,10 @@
+import type {
+  ProjectParameters,
+  ProjectParametersInput,
+  ProjectSite,
+  ProjectSiteInput,
+} from "@tracea/domain";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 const CSRF_COOKIE = "tracea_csrf";
 
@@ -53,13 +60,25 @@ function withQuery(path: string, query: Query | undefined): string {
   return search === "" ? path : `${path}?${search}`;
 }
 
-async function request<T>(
+interface RequestOptions {
+  body?: unknown;
+  query?: Query;
+  headers?: Record<string, string>;
+}
+
+interface RawResponse {
+  /** Parsed JSON body, `undefined` for 202, 204 and non-JSON responses. */
+  payload: unknown;
+  headers: Headers;
+}
+
+async function send(
   method: Method,
   path: string,
-  options: { body?: unknown; query?: Query } = {},
-): Promise<T> {
+  options: RequestOptions = {},
+): Promise<RawResponse> {
   const { body, query } = options;
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...options.headers };
   if (method !== "GET") headers["X-CSRF-Token"] = await ensureCsrf();
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
@@ -70,7 +89,9 @@ async function request<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
-  if (response.status === 204 || response.status === 202) return undefined as unknown as T;
+  if (response.status === 204 || response.status === 202) {
+    return { payload: undefined, headers: response.headers };
+  }
   const contentType = response.headers.get("content-type") ?? "";
   const payload: unknown = contentType.includes("json") ? await response.json() : undefined;
   if (!response.ok) {
@@ -86,7 +107,11 @@ async function request<T>(
           };
     throw new ApiError(problem);
   }
-  return payload as T;
+  return { payload, headers: response.headers };
+}
+
+async function request<T>(method: Method, path: string, options: RequestOptions = {}): Promise<T> {
+  return (await send(method, path, options)).payload as T;
 }
 
 /** Card-level view of a project, as returned by `GET /projects`. */
@@ -103,8 +128,10 @@ export interface ProjectDetail {
   id: string;
   name: string;
   descriptionText: string | null;
-  parameters: Record<string, unknown> | null;
-  site: Record<string, unknown> | null;
+  /** Stored form: only the keys the user filled in. */
+  parameters: ProjectParameters | null;
+  /** Stored form: defaults applied, every key present. */
+  site: ProjectSite | null;
   createdAt: string;
   updatedAt: string;
   thumbnailUrl: string | null;
@@ -123,15 +150,30 @@ export interface ProjectPage {
   nextCursor: string | null;
 }
 
+/** Each group present replaces the stored one entirely; `null` clears it. */
 export interface ProjectPatch {
   name?: string;
   descriptionText?: string | null;
+  parameters?: ProjectParametersInput | null;
+  site?: ProjectSiteInput | null;
+}
+
+/** A project with the `ETag` of its version, to send back unchanged in `If-Match`. */
+export interface VersionedProject {
+  project: ProjectDetail;
+  /** `null` only if the response carried no `ETag` header. */
+  etag: string | null;
 }
 
 const projectPath = (id: string) => `/projects/${encodeURIComponent(id)}`;
 
 async function projectOf(response: Promise<{ project: ProjectDetail }>): Promise<ProjectDetail> {
   return (await response).project;
+}
+
+async function versioned(response: Promise<RawResponse>): Promise<VersionedProject> {
+  const { payload, headers } = await response;
+  return { project: (payload as { project: ProjectDetail }).project, etag: headers.get("etag") };
 }
 
 export const api = {
@@ -155,9 +197,18 @@ export const api = {
       query: { cursor: params.cursor, limit: params.limit },
     }),
   createProject: (name: string) => projectOf(request("POST", "/projects", { body: { name } })),
-  getProject: (id: string) => projectOf(request("GET", projectPath(id))),
-  updateProject: (id: string, patch: ProjectPatch) =>
-    projectOf(request("PATCH", projectPath(id), { body: patch })),
+  getProject: (id: string) => versioned(send("GET", projectPath(id))),
+  /** Without `ifMatch` the last write wins (renaming from « Mes projets »). */
+  updateProject: (id: string, patch: ProjectPatch, options: { ifMatch?: string | null } = {}) =>
+    versioned(
+      send("PATCH", projectPath(id), {
+        body: patch,
+        headers:
+          options.ifMatch === undefined || options.ifMatch === null
+            ? undefined
+            : { "If-Match": options.ifMatch },
+      }),
+    ),
   // The API rejects any non-empty body on this route, so none is sent.
   duplicateProject: (id: string) => projectOf(request("POST", `${projectPath(id)}/duplicate`)),
   deleteProject: (id: string) => request<undefined>("DELETE", projectPath(id)),

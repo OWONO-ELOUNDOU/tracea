@@ -1,11 +1,16 @@
+import {
+  DescriptionTextSchema,
+  ProjectNameSchema,
+  ProjectParametersSchema,
+  ProjectSiteSchema,
+} from "@tracea/domain";
 import type { FastifyPluginCallback } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/plugin.js";
 import {
-  PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_LIST_DEFAULT_LIMIT,
   PROJECT_LIST_MAX_LIMIT,
-  PROJECT_NAME_MAX_LENGTH,
+  projectEtag,
   type ProjectService,
 } from "../projects/service.js";
 import { parseBody } from "../validation.js";
@@ -13,37 +18,20 @@ import { parseBody } from "../validation.js";
 const INVALID_BODY = "Corps de requête invalide.";
 const LIMIT_MESSAGE = `La limite doit être comprise entre 1 et ${String(PROJECT_LIST_MAX_LIMIT)}.`;
 
-const name = z
-  .string("Le nom est requis.")
-  .trim()
-  .min(1, "Le nom est requis.")
-  .max(
-    PROJECT_NAME_MAX_LENGTH,
-    `Le nom est limité à ${String(PROJECT_NAME_MAX_LENGTH)} caractères.`,
-  )
-  .refine((value) => !/\p{Cc}/u.test(value), "Le nom contient des caractères non autorisés.");
-
-const descriptionText = z
-  .string("La description doit être un texte.")
-  .max(
-    PROJECT_DESCRIPTION_MAX_LENGTH,
-    `La description est limitée à ${String(PROJECT_DESCRIPTION_MAX_LENGTH)} caractères.`,
-  )
-  // PostgreSQL text columns cannot store the NUL character.
-  .refine(
-    (value) => !value.includes("\u0000"),
-    "La description contient un caractère non autorisé.",
-  )
-  .nullable();
-
-const CreateSchema = z.strictObject({ name }, INVALID_BODY);
+const CreateSchema = z.strictObject({ name: ProjectNameSchema }, INVALID_BODY);
+// Each group replaces the stored value entirely; `null` clears parameters, site or description.
 const PatchSchema = z
   .strictObject(
-    { name: name.optional(), descriptionText: descriptionText.optional() },
+    {
+      name: ProjectNameSchema.optional(),
+      descriptionText: DescriptionTextSchema.optional(),
+      parameters: ProjectParametersSchema.nullable().optional(),
+      site: ProjectSiteSchema.nullable().optional(),
+    },
     INVALID_BODY,
   )
   .refine(
-    (body) => body.name !== undefined || body.descriptionText !== undefined,
+    (body) => Object.values(body).some((value) => value !== undefined),
     "Indiquez au moins un champ à modifier.",
   );
 const EmptyBodySchema = z.strictObject({}, INVALID_BODY).nullish();
@@ -82,25 +70,39 @@ export const projectRoutes: FastifyPluginCallback<ProjectRoutesOptions> = (app, 
     const user = requireUser(request);
     const body = parseBody(CreateSchema, request.body);
     const project = await projects.create(user.id, body.name);
-    return reply.status(201).header("Location", `/projects/${project.id}`).send({ project });
+    return reply
+      .status(201)
+      .header("Location", `/projects/${project.id}`)
+      .header("ETag", projectEtag(project.updatedAt))
+      .send({ project });
   });
 
-  app.get<IdParams>("/projects/:id", async (request) => {
+  app.get<IdParams>("/projects/:id", async (request, reply) => {
     const user = requireUser(request);
-    return { project: await projects.get(user.id, request.params.id) };
+    const project = await projects.get(user.id, request.params.id);
+    return reply.header("ETag", projectEtag(project.updatedAt)).send({ project });
   });
 
-  app.patch<IdParams>("/projects/:id", async (request) => {
+  // Order of checks: session (401), CSRF (403, hook), body (400/415 framework, 422), owner (404),
+  // If-Match (412).
+  app.patch<IdParams>("/projects/:id", async (request, reply) => {
     const user = requireUser(request);
     const body = parseBody(PatchSchema, request.body);
-    return { project: await projects.update(user.id, request.params.id, body) };
+    const project = await projects.update(user.id, request.params.id, body, {
+      ifMatch: request.headers["if-match"],
+    });
+    return reply.header("ETag", projectEtag(project.updatedAt)).send({ project });
   });
 
   app.post<IdParams>("/projects/:id/duplicate", async (request, reply) => {
     const user = requireUser(request);
     parseBody(EmptyBodySchema, request.body);
     const project = await projects.duplicate(user.id, request.params.id);
-    return reply.status(201).header("Location", `/projects/${project.id}`).send({ project });
+    return reply
+      .status(201)
+      .header("Location", `/projects/${project.id}`)
+      .header("ETag", projectEtag(project.updatedAt))
+      .send({ project });
   });
 
   app.delete<IdParams>("/projects/:id", async (request, reply) => {

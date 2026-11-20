@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions of .github/workflows current (S2-SEC-11): Dependabot rewrites
+  # the SHA and the version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Europe/Paris
+    target-branch: develop
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"

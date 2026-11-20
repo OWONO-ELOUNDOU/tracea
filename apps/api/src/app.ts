@@ -38,8 +38,18 @@ export async function buildApp(
     // Only the configured proxies may set the client address through X-Forwarded-For.
     trustProxy: config.TRUST_PROXY ?? false,
     bodyLimit: 1_048_576,
+    // Malformed URLs are answered outside of the error handler unless routed here.
+    frameworkErrors: problemErrorHandler,
   });
   const secureCookies = config.NODE_ENV === "production";
+  // JSON only: a text/plain body (which needs no CORS pre-flight) now gets 415, not 422 (A13).
+  app.removeContentTypeParser("text/plain");
+  // Responses carry personal data and ETags: no shared or browser cache (S3-SEC-02). A route
+  // that sets its own Cache-Control keeps it.
+  app.addHook("onSend", async (_request, reply, payload) => {
+    if (!reply.hasHeader("cache-control")) reply.header("Cache-Control", "no-store");
+    return payload;
+  });
 
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -54,7 +64,8 @@ export async function buildApp(
     origin: config.APP_URL,
     credentials: true,
     methods: ["GET", "POST", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Request-Id"],
+    allowedHeaders: ["Content-Type", "X-CSRF-Token", "X-Request-Id", "If-Match"],
+    exposedHeaders: ["ETag", "Location"],
   });
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_MINUTE,

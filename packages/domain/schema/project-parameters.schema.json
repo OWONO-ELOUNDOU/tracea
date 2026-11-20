@@ -1,0 +1,115 @@
+{
+  "$id": "https://tracea.app/schemas/project-parameters",
+  "title": "ProjectParameters",
+  "description": "Structured building parameters (EF-201). Lengths in mm, areas in mm². Each room type appears at most once.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "buildingType": {
+      "type": "string",
+      "enum": ["house"]
+    },
+    "levelsCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "targetHabitableArea": {
+      "type": "integer",
+      "minimum": 20000000,
+      "maximum": 500000000
+    },
+    "rooms": {
+      "maxItems": 10,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "livingKitchen",
+              "living",
+              "kitchen",
+              "bedroom",
+              "bathroom",
+              "wc",
+              "office",
+              "laundry",
+              "storage",
+              "technical"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          },
+          "minArea": {
+            "type": "integer",
+            "minimum": 1000000,
+            "maximum": 200000000
+          }
+        },
+        "required": ["type", "count"],
+        "additionalProperties": false
+      }
+    },
+    "garage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["attached", "detached"]
+            },
+            "spaces": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "minArea": {
+              "type": "integer",
+              "minimum": 10000000,
+              "maximum": 100000000
+            }
+          },
+          "required": ["kind", "spaces"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "roof": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["flat", "gable", "hip"]
+        },
+        "covering": {
+          "type": "string",
+          "enum": ["tile", "slate", "metal", "membrane"]
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "livingOrientation": {
+      "type": "string",
+      "enum": ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    }
+  },
+  "additionalProperties": false
+}

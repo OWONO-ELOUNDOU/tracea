@@ -1,4 +1,4 @@
-import type { BuildingModel } from "@tracea/domain";
+import type { BuildingModel, ProjectParameters, ProjectSite } from "@tracea/domain";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -90,8 +90,9 @@ export const projects = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     descriptionText: text("description_text"),
-    parameters: jsonb("parameters").$type<Record<string, unknown>>(),
-    site: jsonb("site").$type<Record<string, unknown>>(),
+    // Written only through ProjectParametersSchema and ProjectSiteSchema (parsed form).
+    parameters: jsonb("parameters").$type<ProjectParameters>(),
+    site: jsonb("site").$type<ProjectSite>(),
     currentVersionId: uuid("current_version_id").references((): AnyPgColumn => versions.id, {
       onDelete: "set null",
     }),

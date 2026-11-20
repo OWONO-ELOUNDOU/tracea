@@ -1,0 +1,5 @@
+{
+  "levelsCount": 2,
+  "garage": { "kind": "none" },
+  "roof": { "type": "flat" }
+}

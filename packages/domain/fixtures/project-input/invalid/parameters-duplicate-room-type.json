@@ -1,0 +1,6 @@
+{
+  "rooms": [
+    { "type": "bedroom", "count": 2 },
+    { "type": "bedroom", "count": 1 }
+  ]
+}

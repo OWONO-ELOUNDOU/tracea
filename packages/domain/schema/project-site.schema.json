@@ -1,0 +1,126 @@
+{
+  "$id": "https://tracea.app/schemas/project-site",
+  "title": "ProjectSite",
+  "description": "Site entered by the user (EF-202). Lengths in mm, angles in degrees. A polygon boundary must be simple with an area of at least 25 m²; accessEdgeIndex must designate an edge of the boundary.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "boundary": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "rectangle"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 5000,
+              "maximum": 500000
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 5000,
+              "maximum": 500000
+            }
+          },
+          "required": ["kind", "width", "depth"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "polygon"
+            },
+            "points": {
+              "minItems": 3,
+              "maxItems": 64,
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "required": ["kind", "points"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "northAngle": {
+      "default": 0,
+      "type": "number",
+      "minimum": 0,
+      "exclusiveMaximum": 360
+    },
+    "accessEdgeIndex": {
+      "default": 0,
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 63
+    },
+    "setbacks": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "front": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000
+        },
+        "side": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000
+        },
+        "rear": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 50000
+        }
+      },
+      "additionalProperties": false
+    },
+    "slope": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "direction": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        },
+        "percent": {
+          "default": 0,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 30
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["boundary"],
+  "additionalProperties": false
+}

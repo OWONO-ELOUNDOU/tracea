@@ -9,7 +9,7 @@ docker compose up --build
 
 Services : `web` (3000), `api` (3001), `engine-worker`, `postgres` (5432), `redis` (6379), `minio` (9000, console 9001), `mailpit` (SMTP 1025, interface 8025).
 
-Purge quotidienne (sessions expirées, corbeille de plus de 30 jours), lancée à la demande en local : `docker compose run --rm purge` (profil `maintenance`, même image que `api`). En staging et production, un planificateur externe lance la même commande une fois par jour : voir `docs/ops/sprint-2-projects.md`.
+Purge quotidienne (sessions expirées, corbeille de plus de 30 jours, jetons d'e-mail expirés ou utilisés depuis plus de 7 jours ; une ligne de journal JSON à trois compteurs), lancée à la demande en local : `docker compose run --rm purge` (profil `maintenance`, même image que `api`). Le service ne reçoit pas `.env` : seules `DATABASE_URL` et `LOG_LEVEL` lui sont transmises, sans `SESSION_SECRET` ni identifiants SMTP ou de stockage. En staging et production, un planificateur externe lance la même commande une fois par jour avec ces deux seules variables et un rôle PostgreSQL dédié, `tracea_purge` : voir `docs/ops/sprint-3-project-description.md` (§ 4) et `docs/ops/sprint-2-projects.md`.
 
 Les identifiants présents dans `docker-compose.yml` (`tracea/tracea`, `minioadmin`) servent uniquement au poste développeur. Staging et production reçoivent leurs secrets du gestionnaire de la plateforme ; aucun n'est versionné.
 
@@ -25,4 +25,4 @@ Les dépendances natives du moteur (IfcOpenShell, cairo) seront ajoutées à `en
 
 ## CI
 
-`.github/workflows/ci.yml` : `lint`, `test`, `contract`, `e2e`, `build`, `security`, avec un jeton en lecture seule (`permissions: contents: read`). Le job `deploy` est ajouté avec le premier environnement de staging.
+`.github/workflows/ci.yml` : `lint`, `test`, `contract`, `e2e`, `build`, `security`, avec un jeton en lecture seule (`permissions: contents: read`). Chaque action est épinglée par empreinte de commit complète, l'étiquette de version en commentaire ; `.github/dependabot.yml` propose chaque semaine, sur `develop`, une PR groupée qui met à jour empreintes et commentaires. Le job `deploy` est ajouté avec le premier environnement de staging.

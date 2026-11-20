@@ -15,6 +15,8 @@ export interface DialogProps {
   /** Called on « Échap »; ignored while `busy`. */
   onCancel: () => void;
   busy: boolean;
+  /** Tailwind max-width class: 440 px by default, 640 px for the description examples. */
+  maxWidthClass?: string;
   children: ReactNode;
 }
 
@@ -30,6 +32,7 @@ export function Dialog({
   initialFocus,
   onCancel,
   busy,
+  maxWidthClass = "max-w-[440px]",
   children,
 }: DialogProps) {
   const titleId = useId();
@@ -83,7 +86,7 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={describedBy}
         onKeyDown={handleKeyDown}
-        className="max-h-[calc(100vh-32px)] w-full max-w-[440px] overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-lg"
+        className={`max-h-[calc(100vh-32px)] w-full ${maxWidthClass} overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-lg`}
       >
         <h2 id={titleId} className="text-lg font-semibold leading-7">
           {title}

@@ -52,9 +52,12 @@ services:
     image: tracea-api:local
     profiles: [maintenance]
     command: ["node", "dist/maintenance/cli.js"]
-    env_file: .env
+    # Least privilege: no `env_file`, so no session secret, SMTP or storage credentials. The
+    # command reads only these two variables (`loadMaintenanceConfig`); LOG_LEVEL is interpolated
+    # from `.env` when set there.
     environment:
       DATABASE_URL: postgres://tracea:tracea@postgres:5432/tracea
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     restart: "no"
     # The image health check probes the HTTP server, which this one-off command does not start.
     healthcheck:

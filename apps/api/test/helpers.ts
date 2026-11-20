@@ -58,12 +58,12 @@ export class Client {
     method: NonNullable<InjectOptions["method"]>,
     url: string,
     body?: unknown,
-    overrides: { csrf?: string | null } = {},
+    overrides: { csrf?: string | null; headers?: Record<string, string> } = {},
   ): Promise<LightMyRequestResponse> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...overrides.headers };
     const csrf = overrides.csrf === undefined ? this.cookies.get("tracea_csrf") : overrides.csrf;
     if (csrf !== undefined && csrf !== null) headers["x-csrf-token"] = csrf;
-    if (body !== undefined) headers["content-type"] = "application/json";
+    if (body !== undefined) headers["content-type"] ??= "application/json";
     const options: InjectOptions = {
       method,
       url,

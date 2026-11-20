@@ -1,3 +1,4 @@
+import type { LogLevel } from "../config.js";
 import type { Database } from "../db/client.js";
 import { purgeExpired } from "./purge.js";
 
@@ -9,8 +10,34 @@ export const writeJsonLine: LogWriter = (line) => {
   process.stdout.write(`${JSON.stringify({ time: Date.now(), ...line })}\n`);
 };
 
+/** Pino numeric levels, so that LOG_LEVEL filters the command's lines as it does the API's. */
+const LEVELS: Readonly<Record<LogLevel, number>> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+};
+
+/** Error lines (level 50 and above) are written whatever LOG_LEVEL says (A14). */
+const ALWAYS_WRITTEN = LEVELS.error;
+
 /**
- * Runs one purge and returns the process exit code. Only the two counters are logged on
+ * Drops lines below `level`. Lines without a numeric level and error lines are always written:
+ * a failed purge must leave a trace even with LOG_LEVEL=fatal, the exit code alone being easy
+ * to miss in a scheduler.
+ */
+export function filterByLevel(level: LogLevel, write: LogWriter): LogWriter {
+  const minimum = Math.min(LEVELS[level], ALWAYS_WRITTEN);
+  return (line) => {
+    if (typeof line.level === "number" && line.level < minimum) return;
+    write(line);
+  };
+}
+
+/**
+ * Runs one purge and returns the process exit code. Only the three counters are logged on
  * success; on failure, only the error class and message, never row contents.
  */
 export async function runPurgeCommand(db: Database, now: Date, log: LogWriter): Promise<number> {

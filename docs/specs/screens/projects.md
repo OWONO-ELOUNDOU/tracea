@@ -16,14 +16,16 @@ Le cadre montre de nombreux éléments sans donnée dans le contrat du sprint (�
 
 Révision après l'implémentation (S2-5) et le parcours de bout en bout (S2-7) : correction de deux non-conformités WCAG 2.5.3 induites par la version précédente (§ 3.4, § 3.6), messages du champ du nom alignés sur l'API (§ 8.3), écarts acceptés consignés au § 12.5.
 
+Révision du sprint 3 (S3-1, 19 novembre 2026, décision D15 du plan `docs/plans/sprint-3-project-description.md`) : un projet s'ouvre depuis sa carte (§ 3.2) et la création ouvre le projet créé (§ 7.1) ; le menu `Actions` est conservé. L'écran du projet est spécifié dans `docs/specs/screens/project-description.md`. Changements récapitulés au § 12.6.
+
 ## 1. Objectif et périmètre
 
-Un utilisateur connecté retrouve ses projets, en crée un (nommé, vide), le renomme, le duplique et le supprime, entièrement au clavier s'il le souhaite.
+Un utilisateur connecté retrouve ses projets, en crée un (nommé, vide), l'ouvre, le renomme, le duplique et le supprime, entièrement au clavier s'il le souhaite.
 
-- Une seule route web : `/projets`. Aucune autre route n'est créée.
+- Route web de l'écran : `/projets`. Il mène à une seule autre route, `/projets/{id}` (écran « Décrire le bâtiment », spécifié à part) ; aucune autre route n'est créée.
 - Toutes les données affichées viennent du contrat du plan (§ 3) : `ProjectSummary`, `ProjectDetail`, `nextCursor`, et de `GET /me` (`PublicUser`) pour l'en-tête.
 - L'écran ne trie pas, ne borne pas et ne valide pas : l'ordre de la liste, les bornes du nom et les refus viennent de l'API. Les messages d'échec viennent de `errorMessage` (`apps/web/src/lib/api.ts`), sauf les deux cas listés au § 8.3. Seule la mise en forme des dates (§ 3.3) et des initiales (§ 3.4) est faite par l'interface.
-- Un projet ne s'ouvre pas : la page de détail est hors périmètre du sprint. Le nom d'un projet est un titre, pas un lien, et la carte n'est pas cliquable.
+- Un projet s'ouvre par son nom, qui est un lien vers `/projets/{id}`, ou par un clic n'importe où sur sa carte en dehors du bouton `Actions` (§ 3.2, D15). La création d'un projet ouvre le projet créé (§ 7.1).
 
 ## 2. Fondations et dimensions
 
@@ -45,7 +47,7 @@ Valeurs non relevées, reprises des fondations v0.1 (`apps/web/src/app/globals.c
   - principal : `bg-primary text-white hover:bg-primary/90 disabled:opacity-60`, `px-4 font-medium` ;
   - secondaire : `border border-line`, texte `ink`, survol `bg-paper` ;
   - destructif : `bg-danger text-white hover:bg-danger/90 disabled:opacity-60`.
-- Focus visible sur tous les éléments interactifs de l'écran : contour de 2 px `primary` décalé de 2 px (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`). Les classes sont posées sur les composants de l'écran ; `globals.css` n'est pas modifié.
+- Focus visible sur tous les éléments interactifs de l'écran : contour de 2 px `primary` décalé de 2 px (`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`). Les classes sont posées sur les composants de l'écran ; `globals.css` n'est pas modifié. Exception : le lien du nom d'un projet, dont le contour est porté par la carte entière (§ 3.2).
 - Conteneur du contenu : `mx-auto max-w-[1344px]` avec marges latérales 48 (`px-12`) ; au-delà de 1 440 px le contenu reste centré à 1 344 px (la maquette ne montre pas de largeur supérieure).
 
 ## 3. Structure
@@ -75,7 +77,7 @@ Rendu du sprint 2 (les éléments masqués du § 3.1 n'y figurent pas) :
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Dans la carte, le texte de date et le bouton `Actions` sont sur la même ligne (pied de carte) ; le schéma les sépare faute de place.
+Dans la carte, le texte de date et le bouton `Actions` sont sur la même ligne (pied de carte) ; le schéma les sépare faute de place. Depuis le sprint 3, toute la carte hors du bouton `Actions` ouvre le projet (§ 3.2).
 
 Hiérarchie et ordre du DOM (c'est aussi l'ordre de lecture et de tabulation) :
 
@@ -102,7 +104,7 @@ Pour chaque élément du cadre `5:2` (identifiant de calque entre parenthèses) 
   - Logo 28 × 28 (`5:5`) : **masqué**. Aucun fichier de logo dans le dépôt ; la marque est le seul nom `Tracea`.
   - Nom de marque « Tracea » (`5:9`) : **rendu**.
   - Navigation « Mes projets » (`5:12`) : **rendue**, entrée courante.
-  - Navigation « Modèles » et « Aide » (`5:14`, `5:16`) : **masquées**. Aucune route web autre que `/projets` au sprint 2.
+  - Navigation « Modèles » et « Aide » (`5:14`, `5:16`) : **masquées**. Aucune route web autre que `/projets` et `/projets/{id}`.
   - Bouton 149 × 40 (`5:18`) : **rendu** avec le libellé `Nouveau projet` (libellé interne de l'instance non relevé, voir § 12.2).
   - Avatar « HE » (`5:21`) : **rendu**, initiales de l'utilisateur, ouvre le menu du compte (§ 3.4).
 - Bloc de titre
@@ -117,7 +119,7 @@ Pour chaque élément du cadre `5:2` (identifiant de calque entre parenthèses) 
   - La rangée entière est absente ; la grille suit directement la zone de message.
 - Carte projet (`5:57` et suivantes)
   - Vignette dessinée (`5:58`) : **emplacement vide** de même taille (`thumbnailUrl` toujours `null`).
-  - Nom (`5:70`) : **rendu**.
+  - Nom (`5:70`) : **rendu**, lien vers le projet depuis le sprint 3 (D15, § 3.2).
   - Étiquette à droite du nom (`5:72`) : **masquée**. Contenu non relevé, aucune donnée de statut dans le contrat.
   - Résumé, par exemple « Plain-pied · 118,6 m² hab. · 3 chambres · garage » (`5:75`) : **remplacé** par l'état des plans `Aucun plan généré` (§ 3.2).
   - Date, par exemple « Version 4 · modifié il y a 2 h » ou « Créé il y a 3 jours » (`5:77`, `5:124`) : **rendue** selon le § 3.2 (version si présente, date de modification relative).
@@ -129,11 +131,20 @@ Pour chaque élément du cadre `5:2` (identifiant de calque entre parenthèses) 
 Dans l'ordre du DOM :
 
 - Emplacement de vignette : bloc décoratif de 180 px de haut, pleine largeur, fond `paper`, bordure basse `line`, `aria-hidden="true"`, vide. Au sprint 2, `thumbnailUrl` est toujours `null` ; s'il ne l'était pas, l'emplacement resterait vide (l'affichage d'une vignette sera spécifié avec la fonctionnalité).
-- Nom : `<h2>`, texte de `name` tel que renvoyé par l'API. Sur la ligne de 24 de la maquette ; un nom trop long passe à la ligne (`overflow-wrap: anywhere`), la carte s'allonge, et toutes les cartes de la rangée prennent la même hauteur.
+- Nom : `<h2>` contenant un lien `<a href="/projets/{id}">` dont le texte est le `name` tel que renvoyé par l'API. Sur la ligne de 24 de la maquette ; un nom trop long passe à la ligne (`overflow-wrap: anywhere`), la carte s'allonge, et toutes les cartes de la rangée prennent la même hauteur.
 - État des plans (emplacement du résumé), `text-xs text-ink/70` : `Aucun plan généré` si `currentVersion` est `null` (toujours le cas au sprint 2). Si `currentVersion` n'est pas `null`, la ligne est absente : le résumé du bâtiment de la maquette demande des données hors contrat.
 - Pied de carte, sur une ligne :
   - à gauche, texte de date `text-xs text-ink/70` : `Modifié {date}` si `currentVersion` est `null`, `Version {number} · modifié {date}` sinon ; `{date}` suit le § 3.3 et porte sur `updatedAt`. Le texte est dans un élément `<time>` dont l'attribut `datetime` porte la valeur ISO reçue ;
   - à droite, bouton secondaire `Actions` (hauteur 40) ; il ouvre le menu des actions (§ 3.5).
+
+Ouverture du projet (D15, sprint 3) :
+
+- Le lien du nom est le seul élément qui ouvre le projet. Sa zone cliquable couvre toute la carte grâce à un pseudo-élément (`::after`, `position: absolute; inset: 0`) posé sur la carte (`position: relative`) ; vignette, état des plans et date sont donc cliquables sans être des contrôles. Le bouton `Actions` et son menu sont placés au-dessus de cette zone (`position: relative; z-index` supérieur) : un clic sur `Actions` n'ouvre jamais le projet.
+- Il s'agit d'un vrai lien : `Ctrl` ou `Cmd` + clic, clic du milieu et menu contextuel ouvrent le projet dans un nouvel onglet ; `Entrée` l'active au clavier.
+- Nom accessible du lien : son texte, c'est-à-dire le nom du projet, sans `aria-label` (WCAG 2.5.3 : le nom est le texte visible). L'état des plans et la date restent hors du lien : ils ne font pas partie de son nom et ne sont pas présentés comme son libellé.
+- Survol de la carte : curseur main, nom souligné ; aucune autre variation (couleurs de survol non relevées).
+- Focus : le lien n'a pas de contour propre (`outline: none`) ; la carte entière reçoit le contour de focus de l'écran (2 px `primary`, décalage 2 px) quand le lien a le focus visible (`:has(a:focus-visible)`), et le nom est souligné. Le focus reste donc visible et désigne toute la zone qui sera activée.
+- Sélection du texte du nom à la souris : rendue difficile par la zone cliquable (limite acceptée, § 12.3).
 
 `createdAt` n'est pas affiché (écart avec « Créé il y a 3 jours » de la maquette, voir § 12.2).
 
@@ -175,7 +186,7 @@ Menu déroulant ancré sous le bouton `Actions`, aligné à droite, sur `surface
 - séparateur
 - `Supprimer`, en `text-danger`
 
-L'entrée survolée ou active a un fond `paper`. Un seul menu (actions ou compte) est ouvert à la fois ; il se ferme à la sélection d'une entrée, sur `Échap`, au clic en dehors et quand le focus le quitte. Ce menu n'est pas dessiné dans la maquette (voir § 12.2).
+L'entrée survolée ou active a un fond `paper`. Un seul menu (actions ou compte) est ouvert à la fois ; il se ferme à la sélection d'une entrée, sur `Échap`, au clic en dehors et quand le focus le quitte. Ce menu n'est pas dessiné dans la maquette (voir § 12.2). Il est conservé au sprint 3 : l'ouverture du projet passe par le nom et la carte, pas par une entrée du menu.
 
 ### 3.6 Tuile « Nouveau projet »
 
@@ -190,7 +201,7 @@ L'entrée survolée ou active a un fond `paper`. Un seul menu (actions ou compte
 
 Tous dans `apps/web/src/components/projects/` (le paquet `packages/ui` est hors périmètre du sprint). Les noms sont indicatifs ; le découpage peut varier tant que les comportements sont respectés.
 
-- `AppHeader` — barre supérieure : marque, navigation, `Nouveau projet`, avatar.
+- `AppHeader` — barre supérieure : marque, navigation, `Nouveau projet`, avatar. Réutilisée par l'écran du projet, avec les variations décrites dans `project-description.md` § 4.1.
 - `AccountMenu` — avatar et panneau du compte (§ 3.4).
 - `ProjectsScreen` — conteneur d'état : chargement initial, liste, curseur, dialogue ouvert, message courant.
 - `ProjectGrid`, `ProjectCard` et `NewProjectTile` — grille, carte (§ 3.2) et tuile (§ 3.6).
@@ -212,14 +223,15 @@ Fonctions du client (plan § 3.5) et usage par l'écran :
 
 - À l'ouverture : `me()` et `listProjects()` (sans `limit` : la valeur par défaut de l'API s'applique), en parallèle.
 - `Afficher plus de projets` : `listProjects({ cursor: nextCursor })`, avec le curseur reçu, renvoyé tel quel.
-- Création : `createProject(name)` ; renommage : `updateProject(id, { name })` ; duplication : `duplicateProject(id)` ; suppression : `deleteProject(id)`.
+- Création : `createProject(name)` ; renommage : `updateProject(id, { name })` (sans `If-Match`, plan du sprint 3 § 3.3) ; duplication : `duplicateProject(id)` ; suppression : `deleteProject(id)`.
 - `getProject(id)` n'est pas utilisé par l'écran.
 
 Les mutations renvoient un `ProjectDetail` ; la carte n'en lit que les champs communs avec `ProjectSummary` (`id`, `name`, `updatedAt`, `thumbnailUrl`, `currentVersion.number`).
 
 Mise à jour de la liste après une action réussie, sans nouvel appel de liste et sans tri côté interface :
 
-- projet créé ou dupliqué : inséré en tête de liste ;
+- projet créé : pas d'insertion, l'écran est quitté pour le projet créé (§ 7.1) ;
+- projet dupliqué : inséré en tête de liste ;
 - projet renommé : remplacé par la réponse et déplacé en tête de liste (l'API le classe désormais en premier, son `updatedAt` étant le plus récent) ;
 - projet supprimé : retiré de la liste.
 
@@ -264,7 +276,7 @@ Quand la liste est vide et que `nextCursor` est `null` :
 
 - Le bouton secondaire `Afficher plus de projets` est affiché sous la grille, centré, à 24 px de celle-ci, tant que `nextCursor` n'est pas `null`. Il disparaît quand `nextCursor` devient `null`. La maquette ne montre pas de pagination.
 - Pendant l'appel : libellé `Chargement…`, bouton marqué `aria-disabled="true"` (il garde le focus ; une nouvelle activation est sans effet tant que l'appel est en cours).
-- Succès : les projets reçus sont ajoutés après les projets déjà affichés, la tuile restant en dernière position ; les projets déjà affichés sont ignorés (§ 5). La zone de statut annonce `{n} projets supplémentaires affichés.` (`1 projet supplémentaire affiché.` au singulier), `n` étant le nombre de projets effectivement ajoutés ; si la page reçue n'apporte aucun projet nouveau (page vide, ou uniquement des projets déjà affichés), elle annonce `Tous vos projets sont affichés.` Le focus est placé sur le bouton `Actions` du premier projet ajouté ; si aucun projet n'a été ajouté, sur `Nouveau projet` de la barre supérieure.
+- Succès : les projets reçus sont ajoutés après les projets déjà affichés, la tuile restant en dernière position ; les projets déjà affichés sont ignorés (§ 5). La zone de statut annonce `{n} projets supplémentaires affichés.` (`1 projet supplémentaire affiché.` au singulier), `n` étant le nombre de projets effectivement ajoutés ; si la page reçue n'apporte aucun projet nouveau (page vide, ou uniquement des projets déjà affichés), elle annonce `Tous vos projets sont affichés.` Le focus est placé sur le lien du nom du premier projet ajouté ; si aucun projet n'a été ajouté, sur `Nouveau projet` de la barre supérieure.
 - Échec : la liste déjà chargée reste affichée, la zone de message affiche l'erreur (`errorMessage`), le bouton retrouve son libellé et garde le focus ; l'activer de nouveau relance l'appel avec le même curseur.
 - Si une suppression vide la liste affichée alors que `nextCursor` n'est pas `null`, la page suivante est chargée automatiquement (état de chargement du § 6.1 dans la zone de contenu) ; l'état vide n'apparaît que lorsque la liste est vide et `nextCursor` `null`.
 
@@ -283,7 +295,7 @@ Règles communes aux dialogues : un seul appel à la fois ; pendant l'appel, le 
 - Déclencheurs : bouton `Nouveau projet` de la barre supérieure, ou tuile `Nouveau projet`. Le « déclencheur » ci-dessous est celui des deux qui a été activé.
 - Dialogue : titre `Nouveau projet` ; champ `Nom du projet` (`type="text"`, `name="name"`, `autocomplete="off"`, `required`, vide, focus initial) ; aide `120 caractères maximum.` ; boutons `Annuler` (secondaire) puis `Créer le projet` (principal, `type="submit"`), alignés à droite. `Entrée` dans le champ soumet.
 - Attente : `Création…`.
-- Succès (201) : le dialogue se ferme, le projet apparaît en tête de liste (l'état vide disparaît le cas échéant), la zone de statut affiche `Projet « {nom} » créé.` avec le `name` renvoyé par l'API, le focus revient sur le déclencheur.
+- Succès (201) : navigation vers `/projets/{id}`, `id` étant celui du projet renvoyé, par ajout d'une entrée d'historique (le bouton Précédent du navigateur ramène à la liste) (D15). Le dialogue reste affiché, bouton en attente, jusqu'au changement de page ; aucun message de statut n'est affiché et le projet n'est pas inséré dans la liste. L'arrivée sur le projet, focus compris, suit `project-description.md` § 7.5.
 - Refus du nom (422 `VALIDATION_ERROR` avec `fields.name`) : le dialogue reste ouvert, la valeur saisie est conservée, le texte de `fields.name` s'affiche sous le champ (propriété `error` de `TextField` : `aria-invalid="true"`, erreur reliée par `aria-describedby`), le focus revient dans le champ. L'erreur disparaît à la première modification du champ. Textes possibles au § 8.3.
 - Autre échec (réseau, 403, 429, 422 sans `fields.name`, 5xx) : le dialogue reste ouvert, la valeur est conservée, un `Message` d'erreur (`role="alert"`) apparaît en tête du dialogue avec `errorMessage(erreur)` et reçoit le focus. L'utilisateur peut soumettre de nouveau.
 - Annulation (`Annuler` ou `Échap`) : le dialogue se ferme sans appel, la saisie est perdue, le focus revient sur le déclencheur.
@@ -324,6 +336,8 @@ Règles communes aux dialogues : un seul appel à la fois ; pendant l'appel, le 
 
 Quand un renommage, une duplication ou une suppression reçoit 404 `PROJECT_NOT_FOUND` (projet déjà supprimé, par exemple depuis un autre onglet) : le dialogue éventuel se ferme, la carte est retirée de la liste, la zone de message affiche l'erreur du § 8.3, et le focus suit la règle de la suppression réussie (projet suivant, précédent, sinon `Nouveau projet` de la barre supérieure).
 
+Un projet supprimé ailleurs puis ouvert depuis sa carte affiche l'état « Projet introuvable » de l'écran du projet (`project-description.md` § 7.3), avec retour à cette liste.
+
 ### 7.6 Déconnexion
 
 - Depuis le menu du compte, `Se déconnecter` appelle `logout()` ; pendant l'appel, libellé `Déconnexion…`, bouton marqué `aria-disabled="true"` (il garde le focus, une nouvelle activation est sans effet), panneau maintenu ouvert.
@@ -343,7 +357,7 @@ Les libellés ci-dessous sont exacts (casse, ponctuation, espaces insécables av
 - Tuile : `Nouveau projet` (texte et nom accessible du bouton) ; `Décrivez, générez, exportez` (paragraphe hors du bouton, description du bouton)
 - Chargement : `Chargement de vos projets…`
 - Liste vide : `Aucun projet pour le moment` ; `Un projet regroupe la description d'un bâtiment, ses plans et ses exports. Utilisez « Nouveau projet » pour créer le premier.`
-- Carte : `Aucun plan généré` ; `Modifié {date}` ; `Version {number} · modifié {date}` ; `Actions` ; formes de `{date}` au § 3.3
+- Carte : `{nom}` (texte et nom accessible du lien vers le projet) ; `Aucun plan généré` ; `Modifié {date}` ; `Version {number} · modifié {date}` ; `Actions` ; formes de `{date}` au § 3.3
 - Nom accessible du bouton d'actions : `Actions pour le projet {nom}`
 - Menu des actions : `Renommer` ; `Dupliquer` ; `Supprimer`
 - Pagination : `Afficher plus de projets` ; `Chargement…`
@@ -354,12 +368,13 @@ Les libellés ci-dessous sont exacts (casse, ponctuation, espaces insécables av
 
 ### 8.2 Messages de statut (`role="status"`)
 
-- `Projet « {nom} » créé.`
 - `Projet renommé en « {nom} ».`
 - `Duplication de « {nom} » en cours…`
 - `Projet dupliqué sous le nom « {nom} ».`
 - `Projet « {nom} » supprimé.`
 - `{n} projets supplémentaires affichés.` ; `1 projet supplémentaire affiché.` ; `Tous vos projets sont affichés.`
+
+Le message `Projet « {nom} » créé.` du sprint 2 n'est plus affiché : la création ouvre le projet (§ 7.1).
 
 ### 8.3 Messages d'erreur (`role="alert"`)
 
@@ -381,18 +396,18 @@ Textes fournis par l'API pour le champ du nom (`fields.name` de la réponse 422)
 - Nom de plus de 120 caractères après nettoyage : `Le nom est limité à 120 caractères.`
 - Nom contenant un caractère de contrôle : `Le nom contient des caractères non autorisés.`
 
-Chaque message nomme la cause ; l'action attendue (saisir un nom, le raccourcir, retirer le caractère) découle du champ resté ouvert avec la saisie conservée.
+Chaque message nomme la cause ; l'action attendue (saisir un nom, le raccourcir, retirer le caractère) découle du champ resté ouvert avec la saisie conservée. Depuis le sprint 3, ces messages sont portés par `ProjectNameSchema` de `packages/domain` ; une reformulation y est proposée (`project-description.md` § 9.4).
 
 ## 9. Accessibilité
 
 ### 9.1 Clavier et ordre de tabulation
 
-- Ordre : lien d'évitement → marque → `Mes projets` (navigation) → `Nouveau projet` → avatar → `Fermer` de la zone de message (si un message est affiché) → bouton `Actions` de chaque carte, dans l'ordre de la grille → tuile `Nouveau projet` → `Afficher plus de projets`.
+- Ordre : lien d'évitement → marque → `Mes projets` (navigation) → `Nouveau projet` → avatar → `Fermer` de la zone de message (si un message est affiché) → pour chaque carte, dans l'ordre de la grille, le lien du nom puis le bouton `Actions` → tuile `Nouveau projet` → `Afficher plus de projets`.
 - Tout est activable par `Entrée` et `Espace` (boutons), `Entrée` (liens). Aucun raccourci à une seule touche, aucun glisser-déposer, aucune action au survol seul.
 - Le focus n'est jamais perdu : après chaque action, il est placé comme indiqué au § 7 ; si l'élément prévu n'existe plus, il va sur `Nouveau projet` de la barre supérieure.
 - Fermer la zone de message par `Fermer` place le focus sur `Nouveau projet` de la barre supérieure.
 - Deux contrôles portent le nom `Nouveau projet` (barre supérieure et tuile) et font la même chose : c'est voulu (maquette), et cohérent pour les technologies d'assistance.
-- Critère WCAG 2.5.3 (« Label in Name ») : le nom accessible de chaque contrôle contient son texte visible, et en commence de préférence (bouton `Actions`, avatar) ; aucun texte visible n'est placé dans un contrôle sans faire partie de son nom (tuile, § 3.6).
+- Critère WCAG 2.5.3 (« Label in Name ») : le nom accessible de chaque contrôle contient son texte visible, et en commence de préférence (bouton `Actions`, avatar) ; le lien d'un projet a pour nom exactement le nom affiché (§ 3.2) ; aucun texte visible n'est placé dans un contrôle sans faire partie de son nom (tuile, § 3.6 ; état des plans et date hors du lien, § 3.2).
 
 ### 9.2 Dialogues
 
@@ -414,6 +429,7 @@ Menu des actions :
 - Dans le menu : `Flèche bas` et `Flèche haut` parcourent les entrées en boucle ; `Début` et `Fin` vont à la première et à la dernière ; `Entrée` ou `Espace` active l'entrée ; `Échap` ferme et rend le focus au bouton ; `Tab` ferme le menu et poursuit la tabulation.
 - Les entrées ne sont pas dans l'ordre de tabulation (`tabindex="-1"`, focus géré par le menu).
 - Après `Renommer` ou `Supprimer`, le focus passe au dialogue ; après `Dupliquer`, il revient au bouton.
+- Le menu ouvert passe au-dessus de la zone cliquable des cartes voisines (§ 3.2) : un clic sur une entrée n'ouvre jamais un projet.
 
 Menu du compte (divulgation) :
 
@@ -432,9 +448,9 @@ Menu du compte (divulgation) :
 
 Rapports calculés selon WCAG 2.1 à partir des valeurs de `globals.css` ; à confirmer par l'analyse automatique du parcours de bout en bout (S2-7). Les couleurs de la maquette n'ayant pas été relevées, ces rapports seront recalculés si elles diffèrent des fondations v0.1.
 
-- `ink` sur `paper` 14,7:1 ; `ink` sur `surface` 16,6:1.
+- `ink` sur `paper` 14,7:1 ; `ink` sur `surface` 16,6:1 (nom du projet, lien compris : il garde la couleur `ink`, le soulignement au survol et au focus le distingue).
 - `ink` à 70 % sur `paper` 5,8:1 ; sur `surface` 6,1:1 (date, état des plans et phrase de la tuile en `text-xs` : texte courant, seuil 4,5:1 respecté).
-- `primary` sur `paper` 8,2:1 et sur `surface` 9,3:1 (marque, icône de la tuile, contour de focus) ; blanc sur `primary` 9,3:1 (bouton principal).
+- `primary` sur `paper` 8,2:1 et sur `surface` 9,3:1 (marque, icône de la tuile, contour de focus, y compris celui de la carte) ; blanc sur `primary` 9,3:1 (bouton principal).
 - `danger` sur `surface` 6,5:1 (entrée `Supprimer`, texte d'erreur) ; blanc sur `danger` 6,5:1 (bouton destructif) ; `danger` sur fond `danger` à 5 % posé sur `surface` 6,0:1 (`Message` dans un dialogue).
 - `ok` sur `surface` 5,0:1 ; `ok` sur `paper` 4,47:1, **insuffisant**. Conséquences : les messages de succès de la page sont sur `surface` avec un texte en `ink` (composant `Notice`) ; le composant `Message` de type succès n'est pas posé directement sur le fond de page.
 - Aucun texte en `accent`, `warn` ou `line`, et aucun texte en `ink` sous 70 % d'opacité.
@@ -444,7 +460,7 @@ Rapports calculés selon WCAG 2.1 à partir des valeurs de `globals.css` ; à co
 
 - Niveaux de titre : `<h1>` `Mes projets` ; `<h2>` pour chaque nom de projet, pour le titre des états vide et erreur, et pour le titre des dialogues.
 - Animations (pulsation des cartes fantômes, apparition des menus ou du dialogue) uniquement sous `motion-safe`, 150 ms au plus. L'apparition animée des menus n'est pas réalisée (écart accepté, § 12.5).
-- Cibles : 40 px de haut au moins pour les boutons, les entrées de menu et le bouton `Actions` ; avatar 32 × 32 (maquette), au-dessus du minimum de 24 × 24 du critère WCAG 2.5.8.
+- Cibles : 40 px de haut au moins pour les boutons, les entrées de menu et le bouton `Actions` ; avatar 32 × 32 (maquette), au-dessus du minimum de 24 × 24 du critère WCAG 2.5.8 ; lien d'un projet : la carte entière.
 - Langue : `lang="fr"` est déjà posé sur le document.
 
 ## 10. Comportement responsive
@@ -468,6 +484,7 @@ Chaque point suit l'hypothèse de travail du plan. Ce qu'un arbitrage contraire 
 - **D3 — corbeille sans restauration.** En dépendent : la dernière phrase du texte de confirmation (`La restauration depuis la corbeille n'est pas disponible dans l'application.`), l'absence d'action d'annulation dans le message `Projet « {nom} » supprimé.` et l'absence de tout accès à une corbeille. Si une restauration est décidée : retirer cette phrase et spécifier l'accès à la corbeille dans un complément ; le reste du § 7.4 est inchangé. Si la suppression devenait immédiate et définitive, le texte de confirmation serait à réécrire en entier.
 - **D9 — doublons de nom autorisés.** L'écran ne compare pas les noms et n'a aucun message de doublon. Si l'unicité est décidée et que l'API la signale par `fields.name` dans un 422, l'écran l'affiche déjà sous le champ sans modification. Un autre code d'erreur (409, par exemple) demanderait une ligne de plus au § 7.1 et au § 7.2 ; la duplication (§ 7.3) devrait alors recevoir un nom unique de l'API.
 - **D10 — pas de plafond de projets.** `Nouveau projet` et `Dupliquer` sont toujours disponibles ; aucun compteur ni message de quota. Si un plafond est décidé, le refus de l'API s'affiche déjà par `errorMessage` (dans le dialogue de création, dans la zone de message pour la duplication). L'indicateur « GÉNÉRATIONS RESTANTES » de la maquette concerne les générations (EF-105), pas le nombre de projets.
+- **D15 — ouverture d'un projet (sprint 3, tranchée le 18 novembre 2026).** La carte ouvre le projet par le lien de son nom étendu à la carte (§ 3.2) ; la création ouvre le projet créé (§ 7.1) ; pas de route `/projets/nouveau` ; le menu `Actions` est conservé. En dépendent : le lien du nom et la zone cliquable (§ 3.2), le succès de la création (§ 7.1), le retrait du message `Projet « {nom} » créé.` (§ 8.2), l'ordre de tabulation (§ 9.1) et le focus après la pagination (§ 6.5).
 
 Les décisions D4 à D8 et D11 à D14 n'ont pas d'effet sur l'écran (identifiants opaques, préfixe et forme des réponses masqués par le client).
 
@@ -492,16 +509,18 @@ Les décisions D4 à D8 et D11 à D14 n'ont pas d'effet sur l'écran (identifian
 1. Date d'un projet sans version : la maquette affiche « Créé il y a 3 jours » (`5:124`) ; l'écran affiche `Modifié {date}` sur `updatedAt`, parce que le critère S2-1 demande la date de modification et que la liste est triée sur cette date. À confirmer.
 2. Formes de date : la maquette mêle « modifié il y a 2 h », « modifié hier » et « il y a 1 semaine » sans « modifié » ; l'écran applique une forme unique (§ 3.3).
 3. Logo (`5:5`) : non rendu, aucun fichier de logo dans le dépôt ; à exporter de la maquette.
-4. Libellés internes des instances non relevés : bouton de la barre supérieure (`5:18`, rendu `Nouveau projet` d'après la description de l'écran), bouton du pied de carte (`5:79`, 64 × 40, rendu `Actions` : si son libellé est une ouverture du projet, cette action est hors périmètre et le menu des actions devra trouver une autre place), segment, étiquettes.
+4. Libellés internes des instances non relevés : bouton de la barre supérieure (`5:18`, rendu `Nouveau projet` d'après la description de l'écran), bouton du pied de carte (`5:79`, 64 × 40, rendu `Actions`), segment, étiquettes. Si le libellé de `5:79` se révélait être une ouverture du projet (par exemple « Ouvrir »), l'ouverture est déjà assurée par le nom et la carte depuis le sprint 3 (§ 3.2) : le bouton resterait `Actions`, et l'écart serait à arbitrer entre un bouton d'ouverture visible et le menu.
 5. Éléments ajoutés, absents de la maquette : menu des actions, dialogues de création, de renommage et de suppression, menu du compte avec `Se déconnecter`, zone de message, pagination, états de chargement, vide et erreur. À dessiner dans la maquette pour validation.
-6. Phrase de la tuile « Décrivez, générez, exportez » : reprise telle quelle, alors qu'au sprint 2 un projet créé ne peut encore être ni décrit ni généré. À confirmer.
+6. Phrase de la tuile « Décrivez, générez, exportez » : reprise telle quelle. Depuis le sprint 3, un projet créé peut être décrit ; il ne peut encore être ni généré ni exporté. À confirmer.
 7. Couleurs, polices, rayons, ombres, style des bordures : non relevés, fondations v0.1 appliquées (§ 2). À vérifier sur une capture de la maquette.
 8. Comportement sous 1 440 px : non dessiné, défini au § 10.
+9. Survol et focus de la carte cliquable (sprint 3) : non dessinés, définis au § 3.2.
 
 ### 12.3 Limites assumées
 
-- Un projet créé ne s'ouvre pas : l'utilisateur reste sur la liste. L'ouverture arrivera avec la page de détail (hors périmètre du sprint).
 - Aucun total de projets n'est affiché (absent du contrat).
+- Carte cliquable (sprint 3) : sélectionner le nom d'un projet à la souris est malaisé ; le renommage passe par le menu `Actions`.
+- Retour depuis un projet : la liste est rechargée ; le focus n'est pas replacé sur la carte du projet quitté.
 
 ### 12.4 Besoins repérés hors périmètre de S2-1
 
@@ -512,7 +531,7 @@ Non spécifiés ici :
 - Texte en `ink` à 60 % sur `paper` dans le pied de la page d'accueil : 4,2:1, sous le seuil AA. Hors de cet écran.
 - Style de focus commun à toute l'application : il est défini ici au niveau des composants de l'écran ; une règle globale dans `globals.css` concernerait aussi les pages d'authentification.
 - Déplacement de `TextField`, `SubmitButton` et `Message` vers un dossier partagé : ils sont réutilisés par import depuis `components/auth/` en attendant `packages/ui`.
-- Rôle designer (`.claude/agents/designer.md`) : il cite encore un autre outil de maquettes et le dossier `docs/design/stitch/` ; non modifié ici, traité à part.
+- Rôle designer (`.claude/agents/designer.md`) : aligné sur la maquette Figma pendant le sprint 3 (soldé).
 - Pages d'authentification : absentes des maquettes v0.1, elles restent provisoires (`docs/specs/screens/auth.md`) et n'ont pas de barre supérieure commune avec cet écran.
 
 ### 12.5 Écarts acceptés à l'implémentation (S2-5, S2-7)
@@ -525,3 +544,13 @@ Non spécifiés ici :
 4. Page suivante sans projet nouveau : le message `Tous vos projets sont affichés.` est annoncé aussi quand la page reçue ne contient que des projets déjà affichés, et pas seulement quand elle est vide (§ 6.5).
 5. Critère WCAG 2.5.3, relevé par l'analyse automatique du parcours de bout en bout : la version précédente donnait à l'avatar le nom `Menu du compte`, sans les initiales visibles, et plaçait la phrase de la tuile dans le bouton sous un nom réduit à `Nouveau projet`. Corrigé aux § 3.4 et § 3.6.
 6. Messages du champ du nom : la version précédente recommandait des formulations différentes de celles de l'API ; le § 8.3 reprend désormais les textes renvoyés par l'API.
+
+### 12.6 Révision du sprint 3 (D15), à implémenter par S3-4
+
+Changements par rapport à l'écran livré au sprint 2 :
+
+1. Carte (§ 3.2) : le nom devient un lien vers `/projets/{id}`, étendu à toute la carte par un pseudo-élément ; `Actions` et son menu au-dessus de cette zone ; contour de focus porté par la carte ; nom souligné au survol et au focus.
+2. Création (§ 7.1) : succès → navigation vers `/projets/{id}` ; plus d'insertion en tête de liste ni de message `Projet « {nom} » créé.`, plus de retour du focus sur le déclencheur.
+3. Pagination (§ 6.5) : focus sur le lien du nom du premier projet ajouté (premier élément focalisable de sa carte).
+4. Ordre de tabulation (§ 9.1) : lien du nom puis `Actions`, pour chaque carte.
+5. Tests à adapter (S3-4, S3-5) : création → navigation vers `/projets/{id}` ; lien de carte vers `/projets/{id}` ; clic sur `Actions` sans navigation ; focus après la pagination ; analyse axe-core sans violation (lien de carte, WCAG 2.5.3).

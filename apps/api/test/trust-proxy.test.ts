@@ -48,6 +48,15 @@ describe("TRUST_PROXY configuration", () => {
       expect(() => loadConfig({ ...BASE_ENV, TRUST_PROXY: value })).toThrow(/TRUST_PROXY/);
     },
   );
+
+  it.each(["false", "FALSE", " false ", "off", "10.0.0.0/8,false"])(
+    "refuses %s at start-up and points to the empty value",
+    (value) => {
+      expect(() => loadConfig({ ...BASE_ENV, TRUST_PROXY: value })).toThrow(
+        /TRUST_PROXY: ".+" is not a proxy address; to trust no proxy, leave TRUST_PROXY empty \(TRUST_PROXY=\)/i,
+      );
+    },
+  );
 });
 
 describe("rate limits without a trusted proxy", () => {

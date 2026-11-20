@@ -55,6 +55,13 @@ export const errors = {
       "Projet introuvable",
       "Ce projet n'existe pas ou n'est plus disponible.",
     ),
+  projectModified: () =>
+    new ApiError(
+      412,
+      "PROJECT_MODIFIED",
+      "Projet modifié ailleurs",
+      "Ce projet a été modifié depuis une autre fenêtre. Rechargez-le pour retrouver la dernière version.",
+    ),
   validation: (fields: Record<string, string>) =>
     new ApiError(
       422,

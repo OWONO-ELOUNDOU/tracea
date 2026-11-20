@@ -17,7 +17,7 @@ import { DeleteProjectDialog } from "./delete-project-dialog";
 import { NewProjectTile } from "./new-project-tile";
 import { Notice, type NoticeMessage } from "./notice";
 import type { ActionOutcome } from "./outcome";
-import { ProjectCard } from "./project-card";
+import { ProjectCard, projectHref } from "./project-card";
 import { ProjectNameDialog } from "./project-name-dialog";
 import { EmptyState, ErrorState, LoadMoreButton, LoadingState, gridClass } from "./states";
 import { focusRing } from "./styles";
@@ -51,6 +51,7 @@ type DialogState =
 
 type FocusTarget =
   | { kind: "actions"; id: string }
+  | { kind: "link"; id: string }
   | { kind: "newProject" }
   | { kind: "main" }
   | { kind: "retry" }
@@ -130,6 +131,13 @@ export function ProjectsScreen({
       case "actions":
         element = actionButtons.current.get(target.id);
         break;
+      case "link":
+        // The name link is the first focusable element of the card (§ 6.5).
+        element = actionButtons.current
+          .get(target.id)
+          ?.closest("article")
+          ?.querySelector<HTMLElement>("a[href]");
+        break;
       case "newProject":
         element = newProjectRef.current;
         break;
@@ -174,7 +182,7 @@ export function ProjectsScreen({
           announce("status", texts.moreLoaded(fresh.length));
           const first = fresh[0];
           requestFocus(
-            first === undefined ? { kind: "newProject" } : { kind: "actions", id: first.id },
+            first === undefined ? { kind: "newProject" } : { kind: "link", id: first.id },
           );
         }
       } catch (error) {
@@ -272,16 +280,11 @@ export function ProjectsScreen({
     setDialog(next);
   }
 
-  async function createProject(trigger: HTMLElement | null, name: string): Promise<ActionOutcome> {
+  async function createProject(name: string): Promise<ActionOutcome> {
     try {
-      const project = toSummary(await client.createProject(name));
-      if (!mounted.current) return { kind: "done" };
-      setProjects((current) =>
-        current.some((item) => item.id === project.id) ? current : [project, ...current],
-      );
-      setDialog(null);
-      announce("status", texts.created(project.name));
-      requestFocus({ kind: "element", element: trigger });
+      const project = await client.createProject(name);
+      // D15: the created project opens; the dialog stays pending until the page changes (§ 7.1).
+      if (mounted.current) navigate.push(projectHref(project.id));
       return { kind: "done" };
     } catch (error) {
       return failure(error);
@@ -295,7 +298,7 @@ export function ProjectsScreen({
       return { kind: "done" };
     }
     try {
-      const renamed = toSummary(await client.updateProject(project.id, { name }));
+      const renamed = toSummary((await client.updateProject(project.id, { name })).project);
       if (!mounted.current) return { kind: "done" };
       // The API now lists it first: its `updatedAt` is the most recent.
       setProjects((current) => [renamed, ...current.filter((item) => item.id !== renamed.id)]);
@@ -468,7 +471,7 @@ export function ProjectsScreen({
       {dialog?.kind === "create" ? (
         <ProjectNameDialog
           mode="create"
-          onSubmit={(name) => createProject(dialog.trigger, name)}
+          onSubmit={(name) => createProject(name)}
           onCancel={cancelDialog}
         />
       ) : null}

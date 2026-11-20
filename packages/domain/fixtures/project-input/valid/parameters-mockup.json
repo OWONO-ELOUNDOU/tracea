@@ -1,0 +1,15 @@
+{
+  "buildingType": "house",
+  "levelsCount": 1,
+  "targetHabitableArea": 120000000,
+  "rooms": [
+    { "type": "livingKitchen", "count": 1, "minArea": 40000000 },
+    { "type": "bedroom", "count": 3, "minArea": 10000000 },
+    { "type": "bathroom", "count": 1 },
+    { "type": "wc", "count": 1 },
+    { "type": "storage", "count": 1, "minArea": 4000000 }
+  ],
+  "garage": { "kind": "attached", "spaces": 2, "minArea": 36000000 },
+  "roof": { "type": "gable", "covering": "tile" },
+  "livingOrientation": "S"
+}

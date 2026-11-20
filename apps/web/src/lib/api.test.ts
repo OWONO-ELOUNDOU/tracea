@@ -3,8 +3,16 @@ import { api, ApiError, isUnauthenticated } from "./api";
 
 const fetchMock = vi.fn<typeof fetch>();
 
-function json(status: number, body: unknown, type = "application/json") {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": type } });
+function json(
+  status: number,
+  body: unknown,
+  type = "application/json",
+  extra: Record<string, string> = {},
+) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": type, ...extra },
+  });
 }
 
 const detail = {
@@ -65,12 +73,36 @@ describe("projects client", () => {
     expect((init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-token");
   });
 
-  it("renames with PATCH on the project path", async () => {
-    fetchMock.mockResolvedValue(json(200, { project: detail }));
-    await api.updateProject("p1", { name: "Villa" });
+  it("renames with PATCH on the project path, without If-Match", async () => {
+    fetchMock.mockResolvedValue(json(200, { project: detail }, undefined, { etag: '"e2"' }));
+    await expect(api.updateProject("p1", { name: "Villa" })).resolves.toEqual({
+      project: detail,
+      etag: '"e2"',
+    });
     const { url, init } = lastCall();
     expect(url).toBe("http://localhost:3001/projects/p1");
     expect(init.method).toBe("PATCH");
+    expect((init.headers as Record<string, string>)["If-Match"]).toBeUndefined();
+  });
+
+  it("reads a project with the ETag of its version", async () => {
+    fetchMock.mockResolvedValue(json(200, { project: detail }, undefined, { etag: '"lx1"' }));
+    await expect(api.getProject("p1")).resolves.toEqual({ project: detail, etag: '"lx1"' });
+    expect(lastCall().init.method).toBe("GET");
+  });
+
+  it("sends the ETag back unchanged in If-Match", async () => {
+    fetchMock.mockResolvedValue(json(200, { project: detail }, undefined, { etag: '"lx2"' }));
+    const patch = { descriptionText: "Maison", parameters: { levelsCount: 1 }, site: null };
+    await expect(api.updateProject("p1", patch, { ifMatch: '"lx1"' })).resolves.toEqual({
+      project: detail,
+      etag: '"lx2"',
+    });
+    const { init } = lastCall();
+    const headers = init.headers as Record<string, string>;
+    expect(headers["If-Match"]).toBe('"lx1"');
+    expect(headers["X-CSRF-Token"]).toBe("csrf-token");
+    expect(init.body).toBe(JSON.stringify(patch));
   });
 
   it("duplicates without a request body", async () => {

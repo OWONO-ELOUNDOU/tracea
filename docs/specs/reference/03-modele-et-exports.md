@@ -148,6 +148,61 @@
 }
 ```
 
+### 2.4 Entrées du projet : paramètres et terrain
+
+Les paramètres structurés (EF-201) et le terrain (EF-202) saisis par l'utilisateur sont des **entrées** du moteur Tracea, pas une représentation du bâtiment. Ils sont décrits par `ProjectParametersSchema` et `ProjectSiteSchema` (`packages/domain/src/project-input.ts`), distincts de `BuildingModel`, qui n'en dépend pas et n'est pas modifié. Ils sont stockés dans les colonnes `projects.parameters` et `projects.site`, sans numéro de version : leurs évolutions restent additives, tout resserrement passe par une migration des données.
+
+Conventions : longueurs en millimètres entiers, surfaces en mm² entiers, angles en degrés décimaux ; objets stricts (clé inconnue refusée) ; `null` refusé à l'intérieur des objets. Les messages de validation sont en français et expriment les valeurs dans l'unité affichée (m, m²). Les JSON Schema (forme d'entrée, clés à valeur par défaut facultatives) sont exportés dans `packages/domain/schema/project-parameters.schema.json` et `project-site.schema.json` ; les règles qui portent sur plusieurs champs (type de pièce unique, polygone simple, surface minimale, arête d'accès) n'y figurent pas et restent vérifiées par Zod. Les fixtures vivent dans `packages/domain/fixtures/project-input/valid/` et `invalid/` (préfixe `parameters-` ou `site-`). Le miroir Pydantic est différé à CU-05 (D23).
+
+```jsonc
+// ProjectParameters : chaque clé est facultative ; absente = « non renseigné », le moteur s'appuie
+// alors sur la description. {} est valide.
+{
+  "buildingType": "house",                 // seule valeur au MVP
+  "levelsCount": 1,                        // 1 à 3
+  "targetHabitableArea": 120000000,        // mm², 20 à 500 m²
+  "rooms": [                               // 0 à 10 lignes, un même type au plus une fois
+    { "type": "livingKitchen", "count": 1, "minArea": 40000000 },  // count 1 à 10 ; minArea 1 à 200 m², facultative
+    { "type": "bedroom", "count": 3, "minArea": 10000000 },
+    { "type": "bathroom", "count": 1 }
+  ],
+  "garage": { "kind": "attached", "spaces": 2, "minArea": 36000000 },  // ou { "kind": "none" } ; spaces 1 à 3 ; minArea 10 à 100 m²
+  "roof": { "type": "gable", "covering": "tile" },  // flat | gable | hip ; tile | slate | metal | membrane
+  "livingOrientation": "S"                 // N, NE, E, SE, S, SW, W, NW
+}
+
+// ProjectSite : boundary requis, autres clés complétées par leur valeur par défaut ;
+// la forme stockée est toujours complète.
+{
+  "boundary": { "kind": "rectangle", "width": 20000, "depth": 30000 },  // mm, 5 à 500 m
+  // ou { "kind": "polygon", "points": [[x, y], …] } : 3 à 64 points, coordonnées 0 à 1 000 m,
+  // polygone simple d'au moins 25 m², fermeture implicite, sens libre
+  "northAngle": 0,                         // [0, 360[, défaut 0, même sens que BuildingModel.site.northAngle
+  "accessEdgeIndex": 0,                    // arête donnant sur la voie, 0 à n − 1 (0 à 3 pour un rectangle), défaut 0
+  "setbacks": { "front": 5000, "side": 3000, "rear": 4000 },  // mm, 0 à 50 m, défaut 0
+  "slope": { "direction": 0, "percent": 0 }  // direction de la descente [0, 360[, pente 0 à 30 %, défaut 0
+}
+```
+
+**Repère de saisie du rectangle.** Sommets `(0,0)`, `(width,0)`, `(width,depth)`, `(0,depth)` ; l'arête `i` va du sommet `i` au sommet `i+1`. Le recul avant s'applique à l'arête d'accès, le recul arrière à l'arête opposée, le recul latéral aux deux autres. `siteBoundaryPolygon(site)` rend ce contour et `buildableZone(site)` la zone constructible d'un rectangle (`null` si elle est vide ou si la parcelle est un polygone, D20). Une zone vide est enregistrée et signalée à l'écran ; la génération la refusera (`SITE_TOO_SMALL`, D28). Cet aperçu n'est pas un plan de masse : le plan de masse dérive de `BuildingModel`.
+
+**Correspondance avec le programme (§ 2.3) et `BuildingModel`.** Elle est appliquée par le moteur au moment de la génération (CU-05) ; les entrées ne sont jamais recopiées telles quelles dans le modèle.
+
+| Entrée                                      | Programme (§ 2.3) et `BuildingModel`                                                                                                                                        |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rooms[].type` (10 valeurs, D18)            | Même nom que `RoomType` pour `living`, `kitchen`, `bedroom`, `bathroom`, `wc`, `office`, `laundry`, `storage`, `technical`                                                  |
+| `livingKitchen`                             | Séjour-cuisine ouvert : une pièce `living` du programme avec `openTo: ["kitchen"]` et la cuisine ouverte sur le séjour ; dans le modèle, pièces `living` et `kitchen`       |
+| `hall`, `corridor`                          | Absents des entrées : les circulations sont produites par le moteur                                                                                                         |
+| `garage` (paramètre distinct, D19)          | `{ kind: "attached" \| "detached" }` → ligne `{ "type": "garage", "count": 1, "minArea", "attached": kind === "attached", "habitable": false }` ; `spaces` guide la surface |
+| `garage: { kind: "none" }`                  | Aucune pièce `garage` ; clé absente = le moteur suit la description                                                                                                         |
+| `roof.type`                                 | `BuildingModel.roof.type` ; `shed` (monopente) existe dans le modèle mais n'est pas proposé à la saisie (EF-201)                                                            |
+| `roof.covering`                             | `BuildingModel.roof.material` (`tile`, `slate`, `metal`, `membrane`)                                                                                                        |
+| `livingOrientation`                         | `orientation` de la ligne `living` du programme                                                                                                                             |
+| `boundary`                                  | `BuildingModel.site.boundary`, ramené au repère du modèle (origine au coin sud-ouest de la zone constructible, § 1)                                                         |
+| `northAngle`, `accessEdgeIndex`, `setbacks` | Champs homonymes de `BuildingModel.site`                                                                                                                                    |
+| `slope`                                     | `BuildingModel.site.slope` (bornes plus larges dans le modèle : pente jusqu'à 100 %)                                                                                        |
+| (aucune)                                    | `BuildingModel.site.groundLevel` n'est pas une entrée : le moteur le fixe à la génération                                                                                   |
+
 ---
 
 ## 3. Conventions de représentation 2D

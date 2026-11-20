@@ -1,11 +1,24 @@
-import type { FastifyPluginCallback } from "fastify";
-
 import {
-  PROJECT_DESCRIPTION_MAX_LENGTH,
-  PROJECT_LIST_DEFAULT_LIMIT,
-  PROJECT_LIST_MAX_LIMIT,
+  DESCRIPTION_MAX_LENGTH,
   PROJECT_NAME_MAX_LENGTH,
-} from "../projects/service.js";
+  ProjectParametersSchema,
+  ProjectSiteSchema,
+} from "@tracea/domain";
+import type { FastifyPluginCallback } from "fastify";
+import { z } from "zod";
+import { PROJECT_LIST_DEFAULT_LIMIT, PROJECT_LIST_MAX_LIMIT } from "../projects/service.js";
+
+/**
+ * JSON Schema of a project input, in its input form (keys with a default value are optional),
+ * produced from the Zod schema of @tracea/domain. Cross-field rules stay enforced by the API.
+ */
+function inputSchema(schema: z.ZodType, description: string): Record<string, unknown> {
+  const { $schema: _dialect, ...document } = z.toJSONSchema(schema, {
+    target: "draft-2020-12",
+    io: "input",
+  });
+  return { ...document, description };
+}
 
 const json = (schema: object) => ({ "application/json": { schema } });
 const problemResponse = (description: string) => ({
@@ -13,10 +26,16 @@ const problemResponse = (description: string) => ({
   content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },
 });
 const common = {
+  "400": { $ref: "#/components/responses/BadRequest" },
   "401": { $ref: "#/components/responses/Unauthenticated" },
   "429": { $ref: "#/components/responses/RateLimited" },
 };
-const mutation = { ...common, "403": { $ref: "#/components/responses/CsrfInvalid" } };
+const mutation = {
+  ...common,
+  "403": { $ref: "#/components/responses/CsrfInvalid" },
+  "413": { $ref: "#/components/responses/PayloadTooLarge" },
+  "415": { $ref: "#/components/responses/UnsupportedMediaType" },
+};
 const csrfHeader = { $ref: "#/components/parameters/CsrfToken" };
 const idParameter = { $ref: "#/components/parameters/ProjectId" };
 const notFound = { "404": { $ref: "#/components/responses/ProjectNotFound" } };
@@ -27,21 +46,46 @@ const projectEnvelope = {
   additionalProperties: false,
   properties: { project: { $ref: "#/components/schemas/ProjectDetail" } },
 };
+const etagHeader = { $ref: "#/components/headers/ETag" };
 const projectCreated = {
   description: "Project created",
-  headers: { Location: { schema: { type: "string" }, description: "/projects/{id}" } },
+  headers: {
+    Location: { schema: { type: "string" }, description: "/projects/{id}" },
+    ETag: etagHeader,
+  },
   content: json(projectEnvelope),
 };
+const projectRead = (description: string) => ({
+  description,
+  headers: { ETag: etagHeader },
+  content: json(projectEnvelope),
+});
 const isoDate = { type: "string", format: "date-time" };
 const projectName = {
   type: "string",
   minLength: 1,
   maxLength: PROJECT_NAME_MAX_LENGTH,
-  description: "Trimmed; control characters are refused. Duplicates are allowed.",
+  description:
+    "Trimmed; length counted in Unicode code points; control characters are refused. Duplicates are allowed.",
 };
 
 const components = {
+  headers: {
+    ETag: {
+      description:
+        "Strong, opaque entity tag of the project; changes on every successful modification. Send it back in If-Match.",
+      schema: { type: "string" },
+    },
+  },
   parameters: {
+    IfMatch: {
+      name: "If-Match",
+      in: "header",
+      required: false,
+      description:
+        "ETag last received. The update happens only if it is still current, otherwise 412 PROJECT_MODIFIED; `*` matches any existing project; a weak or malformed tag never matches. Without it, the last write wins.",
+      schema: { type: "string" },
+    },
     CsrfToken: {
       name: "X-CSRF-Token",
       in: "header",
@@ -67,7 +111,13 @@ const components = {
         status: { type: "integer" },
         code: { type: "string" },
         detail: { type: "string" },
-        fields: { type: "object", additionalProperties: { type: "string" } },
+        fields: {
+          type: "object",
+          additionalProperties: { type: "string" },
+          maxProperties: 20,
+          description:
+            "Field path (dot-separated) to message. At most 20 entries; keys longer than 64 characters are cut and end with an ellipsis.",
+        },
       },
     },
     ProjectSummary: {
@@ -93,6 +143,14 @@ const components = {
         },
       },
     },
+    ProjectParameters: inputSchema(
+      ProjectParametersSchema,
+      "Structured building parameters (EF-201). Lengths in mm, areas in mm². Every key is optional (absent = not specified). Each room type appears at most once.",
+    ),
+    ProjectSite: inputSchema(
+      ProjectSiteSchema,
+      "Site (EF-202). Lengths in mm, angles in degrees. Only boundary is required on write; the other keys take their default. A polygon boundary must be simple with an area of at least 25 m²; accessEdgeIndex must designate an edge of the boundary.",
+    ),
     ProjectDetail: {
       type: "object",
       required: [
@@ -112,8 +170,14 @@ const components = {
         id: { type: "string", format: "uuid" },
         name: { type: "string" },
         descriptionText: { type: ["string", "null"] },
-        parameters: { type: ["object", "null"] },
-        site: { type: ["object", "null"] },
+        parameters: {
+          oneOf: [{ $ref: "#/components/schemas/ProjectParameters" }, { type: "null" }],
+          description: "Stored form, without default values.",
+        },
+        site: {
+          oneOf: [{ $ref: "#/components/schemas/ProjectSite" }, { type: "null" }],
+          description: "Stored form: default values applied, every key present.",
+        },
         createdAt: isoDate,
         updatedAt: isoDate,
         thumbnailUrl: { type: ["string", "null"] },
@@ -138,10 +202,22 @@ const components = {
     },
   },
   responses: {
+    BadRequest: problemResponse(
+      "INVALID_BODY: malformed or empty JSON body, forbidden key such as __proto__; REQUEST_ERROR: other malformed request (URL, headers)",
+    ),
+    PayloadTooLarge: problemResponse("PAYLOAD_TOO_LARGE: body over 1 MiB"),
+    UnsupportedMediaType: problemResponse(
+      "UNSUPPORTED_MEDIA_TYPE: body in any content type other than application/json (text/plain or a form, for example); checked after the session and CSRF token",
+    ),
     Unauthenticated: problemResponse("UNAUTHENTICATED: no valid session"),
     CsrfInvalid: problemResponse("CSRF_TOKEN_INVALID: missing or mismatching X-CSRF-Token"),
     RateLimited: problemResponse("RATE_LIMITED"),
-    ValidationError: problemResponse("VALIDATION_ERROR, with one entry per field in `fields`"),
+    ValidationError: problemResponse(
+      "VALIDATION_ERROR, with one entry per invalid field in `fields` (at most 20)",
+    ),
+    ProjectModified: problemResponse(
+      "PROJECT_MODIFIED: If-Match does not match the current ETag; the project is unchanged",
+    ),
     ProjectNotFound: problemResponse(
       "PROJECT_NOT_FOUND: unknown, deleted, owned by another user or malformed id (identical body)",
     ),
@@ -207,14 +283,16 @@ const projectPaths = {
       summary: "Read a project",
       parameters: [idParameter],
       responses: {
-        "200": { description: "Project", content: json(projectEnvelope) },
+        "200": projectRead("Project"),
         ...notFound,
         ...common,
       },
     },
     patch: {
-      summary: "Rename a project or change its description",
-      parameters: [idParameter, csrfHeader],
+      summary: "Change the name, description, parameters or site of a project",
+      description:
+        "Each group present replaces the stored one entirely; null clears it. Checks run in this order: session (401), CSRF (403), body (400, 413, 415, 422), owner (404), If-Match (412).",
+      parameters: [idParameter, csrfHeader, { $ref: "#/components/parameters/IfMatch" }],
       requestBody: {
         required: true,
         content: json({
@@ -225,14 +303,20 @@ const projectPaths = {
             name: projectName,
             descriptionText: {
               type: ["string", "null"],
-              maxLength: PROJECT_DESCRIPTION_MAX_LENGTH,
+              maxLength: DESCRIPTION_MAX_LENGTH,
+              description: "Length counted in Unicode code points.",
             },
+            parameters: {
+              oneOf: [{ $ref: "#/components/schemas/ProjectParameters" }, { type: "null" }],
+            },
+            site: { oneOf: [{ $ref: "#/components/schemas/ProjectSite" }, { type: "null" }] },
           },
         }),
       },
       responses: {
-        "200": { description: "Updated project", content: json(projectEnvelope) },
+        "200": projectRead("Updated project"),
         ...notFound,
+        "412": { $ref: "#/components/responses/ProjectModified" },
         ...validation,
         ...mutation,
       },

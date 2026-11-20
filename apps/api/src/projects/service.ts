@@ -1,4 +1,10 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import {
+  countCharacters,
+  PROJECT_NAME_MAX_LENGTH,
+  type ProjectParameters,
+  type ProjectSite,
+} from "@tracea/domain";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { Database } from "../db/client.js";
@@ -6,8 +12,6 @@ import type * as schema from "../db/schema.js";
 import { auditLog, projects, versions, type Project, type Version } from "../db/schema.js";
 import { errors } from "../errors.js";
 
-export const PROJECT_NAME_MAX_LENGTH = 120;
-export const PROJECT_DESCRIPTION_MAX_LENGTH = 2000;
 export const PROJECT_LIST_DEFAULT_LIMIT = 20;
 export const PROJECT_LIST_MAX_LIMIT = 50;
 
@@ -30,8 +34,10 @@ export interface ProjectDetail {
   id: string;
   name: string;
   descriptionText: string | null;
-  parameters: Record<string, unknown> | null;
-  site: Record<string, unknown> | null;
+  /** Stored form, without default values. */
+  parameters: ProjectParameters | null;
+  /** Stored form, defaults applied. */
+  site: ProjectSite | null;
   createdAt: string;
   updatedAt: string;
   thumbnailUrl: string | null;
@@ -50,9 +56,55 @@ export interface ProjectPage {
   nextCursor: string | null;
 }
 
+/** Each present group replaces the stored one entirely; `null` clears it. */
 export interface ProjectPatch {
   name?: string | undefined;
   descriptionText?: string | null | undefined;
+  parameters?: ProjectParameters | null | undefined;
+  site?: ProjectSite | null | undefined;
+}
+
+export interface UpdateOptions {
+  /** Raw `If-Match` header; absent means "last write wins". */
+  ifMatch?: string | undefined;
+}
+
+/** Entity tags read from one If-Match header; further entries are ignored. */
+const MAX_IF_MATCH_TAGS = 16;
+const ETAG_PATTERN = /^"([0-9a-z]{1,11})"$/;
+
+/**
+ * Strong entity tag of a project, derived from `updatedAt` (millisecond precision, strictly
+ * increasing on every update). Opaque for clients.
+ */
+export function projectEtag(updatedAt: string): string {
+  return `"${Date.parse(updatedAt).toString(36)}"`;
+}
+
+type Precondition = { kind: "none" } | { kind: "any" } | { kind: "tags"; updatedAt: Date[] };
+
+/**
+ * RFC 9110 If-Match with strong comparison: `*` matches any existing project; weak or malformed
+ * tags never match.
+ */
+function parsePrecondition(header: string | undefined): Precondition {
+  if (header === undefined) return { kind: "none" };
+  const entries = header
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+  if (entries.includes("*")) return { kind: "any" };
+  const updatedAt: Date[] = [];
+  for (const entry of entries.slice(0, MAX_IF_MATCH_TAGS)) {
+    const match = ETAG_PATTERN.exec(entry);
+    if (match?.[1] === undefined) continue;
+    const time = Number.parseInt(match[1], 36);
+    const date = new Date(time);
+    // Only tags this service could have produced: canonical encoding of a valid date.
+    if (Number.isNaN(date.getTime()) || time.toString(36) !== match[1]) continue;
+    updatedAt.push(date);
+  }
+  return { kind: "tags", updatedAt };
 }
 
 interface Cursor {
@@ -80,12 +132,14 @@ function decodeCursor(value: string): Cursor {
 
 /** Appends the copy suffix, shortening the original name so the result stays within the limit. */
 export function copyName(name: string): string {
-  const budget = PROJECT_NAME_MAX_LENGTH - COPY_SUFFIX.length;
+  // Counted in code points, like the name limit (A9).
+  const budget = PROJECT_NAME_MAX_LENGTH - countCharacters(COPY_SUFFIX);
   let base = "";
-  // Iterating by code point never cuts a surrogate pair in half.
+  let count = 0;
   for (const character of name) {
-    if (base.length + character.length > budget) break;
+    if (count >= budget) break;
     base += character;
+    count += 1;
   }
   return `${base.trimEnd()}${COPY_SUFFIX}`;
 }
@@ -222,19 +276,53 @@ export class ProjectService {
     return this.findDetail(this.db, ownerId, projectId);
   }
 
-  async update(ownerId: string, projectId: string, patch: ProjectPatch): Promise<ProjectDetail> {
+  /**
+   * The owner filter and the If-Match condition live in the same UPDATE statement, so a
+   * concurrent write cannot slip between the check and the change.
+   */
+  async update(
+    ownerId: string,
+    projectId: string,
+    patch: ProjectPatch,
+    options: UpdateOptions = {},
+  ): Promise<ProjectDetail> {
     if (!UUID_PATTERN.test(projectId)) throw errors.projectNotFound();
     const changes = {
       ...(patch.name === undefined ? {} : { name: patch.name }),
       ...(patch.descriptionText === undefined ? {} : { descriptionText: patch.descriptionText }),
+      ...(patch.parameters === undefined ? {} : { parameters: patch.parameters }),
+      ...(patch.site === undefined ? {} : { site: patch.site }),
     };
+    const precondition = parsePrecondition(options.ifMatch);
+    const matches =
+      precondition.kind !== "tags"
+        ? undefined
+        : precondition.updatedAt.length === 0
+          ? sql`false`
+          : inArray(projects.updatedAt, precondition.updatedAt);
     return this.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(projects)
-        .set({ ...changes, updatedAt: sql`now()` })
-        .where(this.owned(ownerId, projectId))
+        // Strictly increasing, even for two updates within the same millisecond: the entity tag
+        // derived from it always changes.
+        .set({
+          ...changes,
+          updatedAt: sql`greatest(now(), ${projects.updatedAt} + interval '1 millisecond')`,
+        })
+        .where(and(this.owned(ownerId, projectId), matches))
         .returning({ id: projects.id });
-      if (updated === undefined) throw errors.projectNotFound();
+      if (updated === undefined) {
+        if (precondition.kind === "tags") {
+          const [existing] = await tx
+            .select({ id: projects.id })
+            .from(projects)
+            .where(this.owned(ownerId, projectId))
+            .limit(1);
+          // Another user's project stays a 404, never a 412.
+          if (existing !== undefined) throw errors.projectModified();
+        }
+        throw errors.projectNotFound();
+      }
       await this.audit(tx, ownerId, "project.update", updated.id, {
         fields: Object.keys(changes),
       });

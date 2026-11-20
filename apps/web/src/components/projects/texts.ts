@@ -8,7 +8,6 @@ export const texts = {
   deleteBody: (name: string) =>
     `Le projet ${quoted(name)} sera retiré de votre liste et placé dans la corbeille. Il y est conservé 30 jours, puis supprimé définitivement avec ses plans. La restauration depuis la corbeille n'est pas disponible dans l'application.`,
   emptyBody: `Un projet regroupe la description d'un bâtiment, ses plans et ses exports. Utilisez ${quoted("Nouveau projet")} pour créer le premier.`,
-  created: (name: string) => `Projet ${quoted(name)} créé.`,
   renamed: (name: string) => `Projet renommé en ${quoted(name)}.`,
   duplicating: (name: string) => `Duplication de ${quoted(name)} en cours…`,
   duplicated: (name: string) => `Projet dupliqué sous le nom ${quoted(name)}.`,

@@ -3,8 +3,6 @@ import { accounts } from "../fixtures/accounts.js";
 import { expectNoA11yViolations } from "../support/axe.js";
 import { API_URL, signIn, uniqueProjectName, withApiSession } from "../support/session.js";
 
-const NBSP = " ";
-
 function projectList(page: Page) {
   return page.getByRole("list", { name: "Mes projets" });
 }
@@ -26,7 +24,7 @@ test.describe("Mes projets", () => {
     }
   });
 
-  test("sign in, create a project, find it again after reload", async ({ page }) => {
+  test("sign in, create a project, open it, find it again in the list", async ({ page }) => {
     const name = uniqueProjectName("Maison R+1");
 
     await page.goto("/connexion");
@@ -51,16 +49,30 @@ test.describe("Mes projets", () => {
     await nameField.fill(name);
     await dialog.getByRole("button", { name: "Créer le projet" }).click();
 
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("status")).toContainText(`Projet «${NBSP}${name}${NBSP}» créé.`);
+    // D15: the created project opens.
+    await expect(page).toHaveURL(/\/projets\/[0-9a-f-]{36}$/u);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Décrire le bâtiment" }),
+    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Nom du projet" })).toHaveValue(name);
+    await expect(page).toHaveTitle(`${name} — Décrire le bâtiment — Tracea`);
+    const projectUrl = page.url();
+
+    // Back to the list: the card opens the project again.
+    await page
+      .getByRole("navigation", { name: "Navigation principale" })
+      .getByRole("link", { name: "Mes projets" })
+      .click();
+    await expect(page).toHaveURL(/\/projets$/u);
     await expect(projectCard(page, name)).toBeVisible();
+    await expect(projectList(page).getByRole("article")).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Aucun projet pour le moment" })).toBeHidden();
-    await expect(trigger).toBeFocused();
     await expectNoA11yViolations(page);
 
     await page.reload();
-    await expect(projectCard(page, name)).toBeVisible();
-    await expect(projectList(page).getByRole("article")).toHaveCount(1);
+    await projectCard(page, name).getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(projectUrl);
+    await expect(page.getByRole("textbox", { name: "Nom du projet" })).toHaveValue(name);
   });
 
   test("the tile opens the same creation dialog", async ({ page }) => {
@@ -72,8 +84,8 @@ test.describe("Mes projets", () => {
     await dialog.getByRole("textbox", { name: "Nom du projet" }).fill(name);
     await dialog.getByRole("textbox", { name: "Nom du projet" }).press("Enter");
 
-    await expect(dialog).toBeHidden();
-    await expect(projectCard(page, name)).toBeVisible();
+    await expect(page).toHaveURL(/\/projets\/[0-9a-f-]{36}$/u);
+    await expect(page.getByRole("textbox", { name: "Nom du projet" })).toHaveValue(name);
   });
 
   test("another account neither lists nor reaches the project", async ({ page }) => {

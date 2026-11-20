@@ -129,8 +129,8 @@ describe("ProjectsScreen", () => {
     expect(tile.textContent).toBe("+Nouveau projet");
   });
 
-  it("creates a project, puts it first and gives focus back to the trigger", async () => {
-    const { client, user: event } = setup();
+  it("creates a project and opens it, keeping the dialog pending until the page changes", async () => {
+    const { client, navigate, user: event } = setup();
     await screen.findByText("Maison Mbarga");
     client.createProject.mockResolvedValue(detail("p9", "Duplex Odza"));
 
@@ -143,10 +143,39 @@ describe("ProjectsScreen", () => {
     await event.click(within(dialog).getByRole("button", { name: "Créer le projet" }));
 
     expect(client.createProject).toHaveBeenCalledWith("  Duplex Odza ");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(cardNames()[0]).toBe("Duplex Odza");
-    expect(statusText()).toBe(`Projet «${NBSP}Duplex Odza${NBSP}» créé.`);
-    expect(document.activeElement).toBe(trigger);
+    await waitFor(() => expect(navigate.push).toHaveBeenCalledWith("/projets/p9"));
+    // D15: no insertion, no status message; the dialog waits for the navigation.
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: "Création…" })).toBeTruthy();
+    expect(cardNames()).toEqual(["Maison Mbarga", "Immeuble R+3 Bastos", "Villa Kribi"]);
+    expect(statusText()).toBe("");
+  });
+
+  it("opens a project from the link of its name, the actions staying outside the link", async () => {
+    setup();
+    await screen.findByText("Maison Mbarga");
+    const card = screen.getByRole("article", { name: "Maison Mbarga" });
+    const link = within(card).getByRole("link", { name: "Maison Mbarga" });
+    expect(link.getAttribute("href")).toBe("/projets/p1");
+    expect(link.closest("h2")).toBeTruthy();
+    const actions = within(card).getByRole("button", {
+      name: "Actions pour le projet Maison Mbarga",
+    });
+    expect(link.contains(actions)).toBe(false);
+    // The plan state and the date are not part of the link's name (WCAG 2.5.3).
+    expect(link.textContent).toBe("Maison Mbarga");
+    // Tab order inside a card: the name link, then « Actions ».
+    const focusable = Array.from(card.querySelectorAll('a[href], button:not([tabindex="-1"])'));
+    expect(focusable).toEqual([link, actions]);
+  });
+
+  it("opens the actions menu without following the card link", async () => {
+    const { navigate, user: event } = setup();
+    await screen.findByText("Maison Mbarga");
+    await event.click(screen.getByRole("button", { name: "Actions pour le projet Maison Mbarga" }));
+    expect(screen.getByRole("menuitem", { name: "Renommer" })).toBeTruthy();
+    expect(navigate.push).not.toHaveBeenCalled();
+    expect(window.location.pathname).not.toBe("/projets/p1");
   });
 
   it("shows a 422 name refusal under the field and keeps the dialog open", async () => {
@@ -203,7 +232,10 @@ describe("ProjectsScreen", () => {
   it("renames a project, moves it first and focuses its actions button", async () => {
     const { client, user: event } = setup();
     await screen.findByText("Maison Mbarga");
-    client.updateProject.mockResolvedValue(detail("p3", "Villa Kribi plage"));
+    client.updateProject.mockResolvedValue({
+      project: detail("p3", "Villa Kribi plage"),
+      etag: '"e"',
+    });
 
     await openMenuItem(event, "Villa Kribi", "Renommer");
     const dialog = screen.getByRole("dialog", { name: "Renommer le projet" });
@@ -350,9 +382,7 @@ describe("ProjectsScreen", () => {
     ]);
     expect(statusText()).toBe("1 projet supplémentaire affiché.");
     expect(screen.queryByRole("button", { name: "Afficher plus de projets" })).toBeNull();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Actions pour le projet Bureaux Akwa" }),
-    );
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "Bureaux Akwa" }));
   });
 
   it("redirects to sign-in when the session is missing", async () => {

@@ -1,0 +1,7 @@
+{
+  "boundary": { "kind": "rectangle", "width": 20000, "depth": 30000 },
+  "northAngle": 0,
+  "accessEdgeIndex": 0,
+  "setbacks": { "front": 5000, "side": 3000, "rear": 4000 },
+  "slope": { "direction": 0, "percent": 0 }
+}

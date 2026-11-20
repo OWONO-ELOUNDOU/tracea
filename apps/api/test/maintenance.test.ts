@@ -1,9 +1,14 @@
 import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../src/db/client.js";
-import { projects, sessions, users, versions } from "../src/db/schema.js";
-import { runPurgeCommand, type LogLine } from "../src/maintenance/command.js";
-import { purgeExpired, TRASH_RETENTION_DAYS } from "../src/maintenance/purge.js";
+import { loadMaintenanceConfig } from "../src/config.js";
+import { emailTokens, projects, sessions, users, versions } from "../src/db/schema.js";
+import { filterByLevel, runPurgeCommand, type LogLine } from "../src/maintenance/command.js";
+import {
+  EMAIL_TOKEN_RETENTION_DAYS,
+  purgeExpired,
+  TRASH_RETENTION_DAYS,
+} from "../src/maintenance/purge.js";
 import type { ProjectDetail } from "../src/projects/service.js";
 import {
   type Client,
@@ -102,7 +107,7 @@ describe("purgeExpired", () => {
 
     const result = await purgeExpired(ctx.db, now);
 
-    expect(result).toEqual({ sessionsDeleted: 1, projectsDeleted: 1 });
+    expect(result).toEqual({ sessionsDeleted: 1, projectsDeleted: 1, emailTokensDeleted: 0 });
     const remainingSessions = await ctx.db
       .select({ id: sessions.id })
       .from(sessions)
@@ -124,8 +129,47 @@ describe("purgeExpired", () => {
     expect(detail.json<{ project: ProjectDetail }>().project.currentVersion?.number).toBe(1);
   });
 
+  it("removes e-mail tokens expired or used for more than 7 days only", async () => {
+    let counter = 0;
+    const token = (expiresAt: Date, usedAt: Date | null = null) => {
+      counter += 1;
+      return {
+        userId: aliceId,
+        purpose: "reset_password" as const,
+        tokenHash: `purge-test-hash-${String(counter)}`,
+        expiresAt,
+        usedAt,
+      };
+    };
+    const inserted = await ctx.db
+      .insert(emailTokens)
+      .values([
+        token(ago(8 * DAY_MS)), // expired 8 days ago: removed
+        token(ago(6 * DAY_MS)), // expired 6 days ago: kept
+        token(new Date(now.getTime() + HOUR_MS)), // valid: kept
+        token(new Date(now.getTime() + HOUR_MS), ago(8 * DAY_MS)), // used 8 days ago: removed
+        token(new Date(now.getTime() + HOUR_MS), ago(6 * DAY_MS)), // used 6 days ago: kept
+        token(ago(EMAIL_TOKEN_RETENTION_DAYS * DAY_MS - 1)), // just under the limit: kept
+      ])
+      .returning();
+    const ids = inserted.map((row) => row.id);
+
+    const result = await purgeExpired(ctx.db, now);
+
+    expect(result).toEqual({ sessionsDeleted: 0, projectsDeleted: 0, emailTokensDeleted: 2 });
+    const remaining = await ctx.db
+      .select({ id: emailTokens.id })
+      .from(emailTokens)
+      .where(inArray(emailTokens.id, ids));
+    expect(remaining.map((row) => row.id).sort()).toEqual([ids[1], ids[2], ids[4], ids[5]].sort());
+  });
+
   it("is idempotent: a second run deletes nothing", async () => {
-    expect(await purgeExpired(ctx.db, now)).toEqual({ sessionsDeleted: 0, projectsDeleted: 0 });
+    expect(await purgeExpired(ctx.db, now)).toEqual({
+      sessionsDeleted: 0,
+      projectsDeleted: 0,
+      emailTokensDeleted: 0,
+    });
   });
 
   // Last: moves the clock past the lifetime of every session of this file.
@@ -144,17 +188,18 @@ describe("purgeExpired", () => {
 });
 
 describe("runPurgeCommand", () => {
-  it("logs the two counters only and exits with 0", async () => {
+  it("logs the three counters only and exits with 0", async () => {
     const lines: LogLine[] = [];
     const code = await runPurgeCommand(ctx.db, now, (line) => lines.push(line));
     expect(code).toBe(0);
     expect(lines).toHaveLength(1);
     expect(Object.keys(lines[0]!).sort()).toEqual(
-      ["level", "msg", "projectsDeleted", "sessionsDeleted"].sort(),
+      ["emailTokensDeleted", "level", "msg", "projectsDeleted", "sessionsDeleted"].sort(),
     );
     expect(lines[0]).toMatchObject({ level: 30, msg: "purge completed" });
     expect(typeof lines[0]!.sessionsDeleted).toBe("number");
     expect(typeof lines[0]!.projectsDeleted).toBe("number");
+    expect(typeof lines[0]!.emailTokensDeleted).toBe("number");
   });
 
   it("exits with a non-zero code when the database fails", async () => {
@@ -167,6 +212,65 @@ describe("runPurgeCommand", () => {
     const lines: LogLine[] = [];
     const code = await runPurgeCommand(failing, now, (line) => lines.push(line));
     expect(code).toBe(1);
+    expect(lines).toEqual([
+      { level: 50, msg: "purge failed", err: "Error: connection terminated" },
+    ]);
+  });
+});
+
+describe("loadMaintenanceConfig (S2-SEC-08)", () => {
+  it("starts with DATABASE_URL only, without SESSION_SECRET", () => {
+    expect(loadMaintenanceConfig({ DATABASE_URL: "postgres://purge@db:5432/tracea" })).toEqual({
+      DATABASE_URL: "postgres://purge@db:5432/tracea",
+      LOG_LEVEL: "info",
+    });
+  });
+
+  it("reads LOG_LEVEL and ignores every other variable", () => {
+    const config = loadMaintenanceConfig({
+      DATABASE_URL: "postgres://purge@db:5432/tracea",
+      LOG_LEVEL: "warn",
+      SESSION_SECRET: "short",
+      TRUST_PROXY: "true",
+    });
+    expect(config).toEqual({ DATABASE_URL: "postgres://purge@db:5432/tracea", LOG_LEVEL: "warn" });
+  });
+
+  it.each([{}, { DATABASE_URL: "" }, { DATABASE_URL: "  " }])(
+    "refuses a missing DATABASE_URL (%o) with an explicit error",
+    (env) => {
+      expect(() => loadMaintenanceConfig(env)).toThrow(
+        "Invalid environment configuration: DATABASE_URL: DATABASE_URL is required",
+      );
+    },
+  );
+
+  it("refuses an unknown LOG_LEVEL", () => {
+    expect(() =>
+      loadMaintenanceConfig({ DATABASE_URL: "postgres://db/tracea", LOG_LEVEL: "verbose" }),
+    ).toThrow(/LOG_LEVEL/);
+  });
+});
+
+describe("filterByLevel", () => {
+  it("drops lines below the configured level", () => {
+    const lines: LogLine[] = [];
+    const write = filterByLevel("warn", (line) => lines.push(line));
+    write({ level: 30, msg: "purge completed" });
+    write({ level: 50, msg: "purge failed" });
+    expect(lines).toEqual([{ level: 50, msg: "purge failed" }]);
+  });
+
+  it("still writes the failure line with LOG_LEVEL=fatal (A14)", async () => {
+    const lines: LogLine[] = [];
+    const write = filterByLevel("fatal", (line) => lines.push(line));
+    write({ level: 30, msg: "purge completed" });
+    const failing = {
+      delete: () => {
+        throw new Error("connection terminated");
+      },
+    } as unknown as Database;
+    expect(await runPurgeCommand(failing, now, write)).toBe(1);
     expect(lines).toEqual([
       { level: 50, msg: "purge failed", err: "Error: connection terminated" },
     ]);

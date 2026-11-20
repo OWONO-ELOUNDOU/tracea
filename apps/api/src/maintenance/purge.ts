@@ -1,11 +1,13 @@
-import { and, isNotNull, lt, lte } from "drizzle-orm";
+import { and, isNotNull, lt, lte, or } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
 import type * as schema from "../db/schema.js";
-import { projects, sessions } from "../db/schema.js";
+import { emailTokens, projects, sessions } from "../db/schema.js";
 
 /** Days a soft-deleted project stays in the trash before it is removed for good. */
 export const TRASH_RETENTION_DAYS = 30;
+/** Days an expired or used e-mail token is kept (support: "my link no longer works"). */
+export const EMAIL_TOKEN_RETENTION_DAYS = 7;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -15,11 +17,13 @@ type Executor = PgDatabase<PgQueryResultHKT, typeof schema>;
 export interface PurgeResult {
   sessionsDeleted: number;
   projectsDeleted: number;
+  emailTokensDeleted: number;
 }
 
 /**
- * Deletes expired sessions and projects that have been in the trash for more than
- * `TRASH_RETENTION_DAYS`; their versions go with them through the foreign-key cascade.
+ * Deletes expired sessions, projects that have been in the trash for more than
+ * `TRASH_RETENTION_DAYS` (their versions go with them through the foreign-key cascade), and
+ * e-mail tokens expired or used for more than `EMAIL_TOKEN_RETENTION_DAYS` (S2-SEC-12).
  * Idempotent and safe to run concurrently: each statement only removes rows that still match.
  */
 export async function purgeExpired(db: Database, now: Date): Promise<PurgeResult> {
@@ -36,5 +40,15 @@ export async function purgeExpired(db: Database, now: Date): Promise<PurgeResult
     .where(and(isNotNull(projects.deletedAt), lt(projects.deletedAt, trashCutoff)))
     .returning({ id: projects.id });
 
-  return { sessionsDeleted: expiredSessions.length, projectsDeleted: purgedProjects.length };
+  const tokenCutoff = new Date(now.getTime() - EMAIL_TOKEN_RETENTION_DAYS * DAY_MS);
+  const purgedTokens = await executor
+    .delete(emailTokens)
+    .where(or(lt(emailTokens.expiresAt, tokenCutoff), lt(emailTokens.usedAt, tokenCutoff)))
+    .returning({ id: emailTokens.id });
+
+  return {
+    sessionsDeleted: expiredSessions.length,
+    projectsDeleted: purgedProjects.length,
+    emailTokensDeleted: purgedTokens.length,
+  };
 }
