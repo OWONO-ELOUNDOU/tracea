@@ -11,7 +11,9 @@ RUN pnpm install --frozen-lockfile
 COPY packages ./packages
 COPY apps/api ./apps/api
 RUN pnpm --filter @tracea/domain build && pnpm --filter @tracea/api build
-RUN pnpm --filter @tracea/api --prod deploy /out
+# pnpm 10 only deploys injected workspace packages by default; the legacy mode copies
+# @tracea/domain into /out without changing how the workspace is linked for development.
+RUN pnpm --filter @tracea/api --prod deploy --legacy /out
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
