@@ -1,0 +1,14 @@
+# Reviewed false positives (generic-api-key), ignored by exact fingerprint so that any
+# other match in the same files is still reported:
+# - apps/api/src/auth/password.ts:18 — entry of the common-password deny list.
+# - apps/api/test/auth.test.ts:174, 206 — throwaway password used by the reset tests.
+# - apps/api/test/auth.test.ts:205 — deliberately invalid reset token in a test.
+# 24b2ce3 is the same auth commit as b8727ea, kept on the feature/auth branch.
+b8727eae9e96cb05ab8ac3de5c7c89bf81655938:apps/api/src/auth/password.ts:generic-api-key:18
+b8727eae9e96cb05ab8ac3de5c7c89bf81655938:apps/api/test/auth.test.ts:generic-api-key:174
+b8727eae9e96cb05ab8ac3de5c7c89bf81655938:apps/api/test/auth.test.ts:generic-api-key:205
+b8727eae9e96cb05ab8ac3de5c7c89bf81655938:apps/api/test/auth.test.ts:generic-api-key:206
+24b2ce3b6d80900e3975ed44fd76aaf0ec6fbf89:apps/api/src/auth/password.ts:generic-api-key:18
+24b2ce3b6d80900e3975ed44fd76aaf0ec6fbf89:apps/api/test/auth.test.ts:generic-api-key:174
+24b2ce3b6d80900e3975ed44fd76aaf0ec6fbf89:apps/api/test/auth.test.ts:generic-api-key:205
+24b2ce3b6d80900e3975ed44fd76aaf0ec6fbf89:apps/api/test/auth.test.ts:generic-api-key:206
